@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suthisa — Maize Meal (Demo)</title>
+<style>
+:root{
+  --green:#1B7A43;--green-dark:#12592F;--green-soft:#e7f3ec;--yellow:#F4C430;--yellow-soft:#fdf6dc;
+  --ink:#1f2937;--muted:#6b7280;--line:#e5e7eb;--bg:#f5f7f5;--white:#fff;
+  --amber:#b7791f;--amber-bg:#fdf3d7;--blue:#1d4ed8;--blue-bg:#e0e8ff;--purple:#6d28d9;--purple-bg:#ede4ff;--red:#b91c1c;--red-bg:#fde3e3;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+a{color:var(--green);text-decoration:none}
+button{font:inherit;cursor:pointer}
+img{max-width:100%}
+
+/* demo ribbon */
+.demoflag{background:#111827;color:#ffed;color:#ffe9a8;text-align:center;font-size:12px;padding:4px 8px;letter-spacing:.3px}
+.demoflag b{color:#fff}
+
+/* header */
+header.top{background:var(--green);color:#fff;position:sticky;top:0;z-index:30;border-bottom:4px solid var(--yellow)}
+.top .row{max-width:1080px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:10px 14px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:8px;font-weight:800;letter-spacing:1px;font-size:18px;color:#fff}
+.brand .logo{width:30px;height:30px;border-radius:8px;background:var(--yellow);color:var(--green-dark);display:grid;place-items:center;font-size:18px}
+.brand small{display:block;font-weight:500;font-size:10px;letter-spacing:2px;opacity:.85;text-transform:uppercase}
+.spacer{flex:1}
+.persona{display:flex;align-items:center;gap:6px;font-size:13px}
+.persona select{padding:6px 8px;border-radius:8px;border:0;font-size:13px;background:#fff;color:var(--ink)}
+.cartbtn{position:relative;background:var(--yellow);color:var(--green-dark);border:0;border-radius:8px;padding:8px 12px;font-weight:700}
+.cartbtn .badge{position:absolute;top:-8px;right:-8px;background:#b91c1c;color:#fff;border-radius:20px;font-size:11px;min-width:20px;height:20px;display:grid;place-items:center;padding:0 5px}
+nav.main{max-width:1080px;margin:0 auto;display:flex;gap:4px;padding:0 8px 8px;overflow-x:auto}
+nav.main button{white-space:nowrap;background:rgba(255,255,255,.12);color:#fff;border:0;border-radius:20px;padding:7px 14px;font-size:14px}
+nav.main button.active{background:#fff;color:var(--green-dark);font-weight:700}
+
+main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
+
+/* generic */
+.h1{font-size:22px;font-weight:800;color:var(--green-dark);margin:6px 0 2px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 16px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px}
+.grid{display:grid;gap:14px}
+.btn{border:0;border-radius:10px;padding:11px 16px;font-weight:700;font-size:15px}
+.btn-primary{background:var(--green);color:#fff}
+.btn-primary:hover{background:var(--green-dark)}
+.btn-yellow{background:var(--yellow);color:var(--green-dark)}
+.btn-ghost{background:#fff;color:var(--green-dark);border:1.5px solid var(--green)}
+.btn-sm{padding:7px 11px;font-size:13px;border-radius:8px}
+.btn-block{display:block;width:100%;text-align:center}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.link{background:none;border:0;color:var(--green);font-weight:600;padding:0}
+.pill{display:inline-block;font-size:12px;font-weight:700;padding:3px 9px;border-radius:20px}
+.pill.green{background:var(--green-soft);color:var(--green-dark)}
+.pill.yellow{background:var(--yellow-soft);color:var(--amber)}
+.pill.amber{background:var(--amber-bg);color:var(--amber)}
+.pill.blue{background:var(--blue-bg);color:var(--blue)}
+.pill.purple{background:var(--purple-bg);color:var(--purple)}
+.pill.red{background:var(--red-bg);color:var(--red)}
+.tag-whole{background:var(--yellow);color:var(--green-dark);font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px}
+
+/* product grid */
+.products{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.product{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.pimg{height:130px;background:linear-gradient(135deg,var(--green-soft),var(--yellow-soft));display:grid;place-items:center;font-size:54px}
+.pbody{padding:12px;display:flex;flex-direction:column;gap:6px;flex:1}
+.pname{font-weight:700}
+.pcat{font-size:12px;color:var(--muted)}
+.pprice{font-size:18px;font-weight:800;color:var(--green-dark)}
+.pprice .was{font-size:13px;color:var(--muted);text-decoration:line-through;font-weight:500;margin-left:6px}
+.psize{font-size:12px;color:var(--muted)}
+
+/* detail */
+.detail{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.detail .pimg{height:280px;border-radius:14px;font-size:120px}
+.sizes{display:flex;flex-wrap:wrap;gap:8px}
+.sizes button{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:9px 14px;font-weight:700}
+.sizes button.active{border-color:var(--green);background:var(--green-soft);color:var(--green-dark)}
+.sizes button:disabled{opacity:.4;cursor:not-allowed;text-decoration:line-through}
+.qty{display:inline-flex;align-items:center;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+.qty button{background:#f3f4f6;border:0;width:40px;height:42px;font-size:20px}
+.qty span{min-width:44px;text-align:center;font-weight:700}
+
+/* tables */
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:520px;background:#fff}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+th{background:var(--green);color:#fff;font-weight:600}
+tbody tr:nth-child(even){background:#f7faf8}
+td input{width:92px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font-size:14px}
+td input.stock{width:70px}
+
+/* forms */
+label{display:block;font-size:13px;font-weight:600;margin:10px 0 4px}
+input[type=text],input[type=email],input[type=tel],input[type=number],select,textarea{
+  width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;font-family:inherit}
+textarea{min-height:70px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.radio{display:flex;gap:10px;align-items:flex-start;border:1.5px solid var(--line);border-radius:12px;padding:12px;margin:8px 0;cursor:pointer}
+.radio.sel{border-color:var(--green);background:var(--green-soft)}
+.radio input{margin-top:3px}
+.radio .t{font-weight:700}
+.radio .d{font-size:13px;color:var(--muted)}
+
+/* summary */
+.sumrow{display:flex;justify-content:space-between;padding:6px 0;font-size:15px}
+.sumrow.total{font-size:19px;font-weight:800;color:var(--green-dark);border-top:2px solid var(--line);margin-top:6px;padding-top:10px}
+.note{background:var(--yellow-soft);border-left:4px solid var(--yellow);padding:10px 12px;border-radius:0 8px 8px 0;font-size:13px;margin:10px 0}
+.bank{background:var(--green-soft);border-radius:10px;padding:12px 14px;font-size:14px}
+.bank div{display:flex;justify-content:space-between;padding:3px 0}
+.bank b{font-variant-numeric:tabular-nums}
+
+/* dashboard */
+.stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
+.stat .n{font-size:26px;font-weight:800;color:var(--green-dark)}
+.stat .l{font-size:13px;color:var(--muted)}
+.stat.alert .n{color:var(--amber)}
+.bar{display:grid;grid-template-columns:130px 1fr 90px;align-items:center;gap:10px;margin:8px 0;font-size:14px}
+.bar .track{background:#eef2ef;border-radius:20px;height:16px;overflow:hidden}
+.bar .fill{height:100%;background:var(--green);border-radius:20px}
+
+.empty{text-align:center;padding:40px 16px;color:var(--muted)}
+.empty .big{font-size:50px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(30px);background:#111827;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;opacity:0;transition:.25s;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.crumb{background:none;border:0;color:var(--muted);padding:0;margin-bottom:8px;font-size:14px}
+.footer{max-width:1080px;margin:20px auto 0;padding:16px 14px;color:var(--muted);font-size:12px;text-align:center}
+
+@media(max-width:760px){
+  .detail{grid-template-columns:1fr}
+  .detail .pimg{height:200px;font-size:90px}
+  .row2{grid-template-columns:1fr}
+  .brand small{display:none}
+}
+</style>
+</head>
+<body>
+<div class="demoflag">🧪 <b>DEMO / PROTOTYPE</b> — sample data only, no real payments or accounts. Switch persona (top-right) to see retail vs wholesale vs the admin console.</div>
+<header class="top">
+  <div class="row">
+    <div class="brand"><span class="logo">🌽</span><span>SUTHISA<small>Maize Meal</small></span></div>
+    <div class="spacer"></div>
+    <div class="persona">
+      <span>View as:</span>
+      <select id="persona"></select>
+    </div>
+    <button class="cartbtn" data-act="go" data-view="#/cart" id="cartbtn">🛒 Cart<span class="badge" id="cartbadge">0</span></button>
+  </div>
+  <nav class="main" id="nav"></nav>
+</header>
+<main id="app"></main>
+<div class="footer">Suthisa Maize Meal — interactive demo · Rands (ZAR) · sizes in KG · <button class="link" data-act="reset">Reset demo data</button></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- helpers ---------- */
+var $=function(s,r){return (r||document).querySelector(s);};
+function zar(c){var v=(c/100).toFixed(2).split('.');var i=v[0].replace(/\B(?=(\d{3})+(?!\d))/g,' ');return 'R '+i+','+v[1];}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];});}
+function toast(m){var t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show');},1900);}
+/* storage-safe wrapper: falls back to in-memory if the browser blocks localStorage
+   (some phones block storage for files opened directly / in in-app browsers) */
+var LS=(function(){try{var k='__suthisa_t';window.localStorage.setItem(k,'1');window.localStorage.removeItem(k);return window.localStorage;}
+  catch(e){var mem={};return {getItem:function(k){return (k in mem)?mem[k]:null;},setItem:function(k,v){mem[k]=String(v);},removeItem:function(k){delete mem[k];}};}})();
+
+/* ---------- seed data (prices in cents) ---------- */
+var SEED={
+  orderSeq:1006,
+  settings:{
+    bankName:'First National Bank (FNB)', accName:'Suthisa Foods (Pty) Ltd', accNo:'6284 1573 902', branch:'250655', accType:'Cheque / Current',
+    deliveryFee:6500, lowStock:10, vatRegistered:false,
+    depots:['Johannesburg Depot — 14 Mill Rd, Booysens','Pretoria Depot — 88 Maize St, Silverton']
+  },
+  products:[
+    {id:'p1',name:'Super Maize Meal',cat:'Maize Meal',emoji:'🌽',desc:'Premium super-fine maize meal. A zero-rated staple food (0% VAT).',variants:[
+      {id:'p1a',kg:1,retail:1699,wholesale:1350,stock:150},
+      {id:'p1b',kg:5,retail:6999,wholesale:5900,stock:90},
+      {id:'p1c',kg:10,retail:12499,wholesale:10500,stock:40},
+      {id:'p1d',kg:25,retail:28999,wholesale:24900,stock:15},
+      {id:'p1e',kg:50,retail:53999,wholesale:46900,stock:5}
+    ]},
+    {id:'p2',name:'Special Maize Meal',cat:'Maize Meal',emoji:'🌽',desc:'Everyday special maize meal. Zero-rated staple food (0% VAT).',variants:[
+      {id:'p2a',kg:1,retail:1399,wholesale:1100,stock:200},
+      {id:'p2b',kg:5,retail:5999,wholesale:4900,stock:110},
+      {id:'p2c',kg:10,retail:10999,wholesale:9200,stock:60},
+      {id:'p2d',kg:25,retail:25999,wholesale:21900,stock:22},
+      {id:'p2e',kg:50,retail:48999,wholesale:41900,stock:8}
+    ]},
+    {id:'p3',name:'Samp',cat:'Staples',emoji:'🍚',desc:'Dried samp — shows how the catalogue extends beyond maize meal.',variants:[
+      {id:'p3a',kg:1,retail:1999,wholesale:1600,stock:80},
+      {id:'p3b',kg:5,retail:8999,wholesale:7500,stock:40},
+      {id:'p3c',kg:10,retail:16999,wholesale:14200,stock:25}
+    ]}
+  ],
+  distributors:[
+    {id:'d1',business:'Ubuntu Spaza Group',name:'Bongani Khumalo',phone:'082 555 1122',email:'bongani@ubuntuspaza.co.za',status:'pending'},
+    {id:'d2',business:'Green Valley Traders',name:'Aisha Patel',phone:'071 444 8899',email:'aisha@greenvalley.co.za',status:'pending'}
+  ],
+  orders:[
+    {number:'ORD-1001',when:'2 days ago',customer:'Nomsa Dlamini',tier:'retail',fulfillment:'delivery',address:'22 Vilakazi St, Soweto',payment:'online',status:'completed',proof:null,
+      items:[{name:'Super Maize Meal',kg:10,qty:2,unit:12499}],delivery:6500},
+    {number:'ORD-1002',when:'5 hours ago',customer:'Sipho Ndlovu',tier:'retail',fulfillment:'collection',depot:'Johannesburg Depot — 14 Mill Rd, Booysens',payment:'eft',status:'pending',proof:'proof-of-payment-1002.jpg',
+      items:[{name:'Super Maize Meal',kg:50,qty:1,unit:53999}],delivery:0},
+    {number:'ORD-1003',when:'1 day ago',customer:'Kagiso Wholesalers',tier:'wholesale',fulfillment:'delivery',address:'5 Industrial Ave, Germiston',payment:'online',status:'preparing',proof:null,
+      items:[{name:'Special Maize Meal',kg:25,qty:6,unit:21900}],delivery:6500},
+    {number:'ORD-1004',when:'3 hours ago',customer:'Lerato Mokoena',tier:'retail',fulfillment:'delivery',address:'9 Church St, Pretoria',payment:'eft',status:'out_for_delivery',proof:'eft-slip-1004.pdf',
+      items:[{name:'Samp',kg:5,qty:3,unit:8999}],delivery:6500},
+    {number:'ORD-1005',when:'20 min ago',customer:'Themba Zulu',tier:'retail',fulfillment:'collection',depot:'Pretoria Depot — 88 Maize St, Silverton',payment:'online',status:'ready',proof:null,
+      items:[{name:'Super Maize Meal',kg:5,qty:2,unit:6999}],delivery:0}
+  ]
+};
+
+var PERSONAS={
+  'Guest':{role:'shop',wholesale:false,name:'Guest'},
+  'Retail customer':{role:'shop',wholesale:false,name:'Nomsa Dlamini'},
+  'Approved distributor':{role:'shop',wholesale:true,name:'Kagiso Wholesalers'},
+  'Admin':{role:'admin',wholesale:false,name:'Admin'}
+};
+
+var STATUS={
+  pending:{label:'Awaiting payment',c:'amber'},paid:{label:'Paid',c:'green'},preparing:{label:'Preparing',c:'blue'},
+  ready:{label:'Ready for collection',c:'purple'},out_for_delivery:{label:'Out for delivery',c:'purple'},
+  completed:{label:'Completed',c:'green'},cancelled:{label:'Cancelled',c:'red'},refunded:{label:'Refunded',c:'red'}
+};
+function nextStatuses(o){
+  switch(o.status){
+    case 'pending':return ['paid','cancelled'];
+    case 'paid':return ['preparing','refunded','cancelled'];
+    case 'preparing':return [o.fulfillment==='collection'?'ready':'out_for_delivery','cancelled'];
+    case 'ready':return ['completed'];
+    case 'out_for_delivery':return ['completed'];
+    case 'completed':return ['refunded'];
+    default:return [];
+  }
+}
+
+/* ---------- state ---------- */
+var KEY='suthisa-demo-v1', state, session={personaName:'Guest'}, cart=[];
+function load(){
+  try{var s=JSON.parse(LS.getItem(KEY));}catch(e){s=null;}
+  state=s||JSON.parse(JSON.stringify(SEED));
+  try{cart=JSON.parse(LS.getItem(KEY+'-cart'))||[];}catch(e){cart=[];}
+  try{session.personaName=LS.getItem(KEY+'-persona')||'Guest';}catch(e){session.personaName='Guest';}
+}
+function save(){try{LS.setItem(KEY,JSON.stringify(state));LS.setItem(KEY+'-cart',JSON.stringify(cart));LS.setItem(KEY+'-persona',session.personaName);}catch(e){}}
+function persona(){return PERSONAS[session.personaName]||PERSONAS.Guest;}
+function isWholesale(){return persona().wholesale;}
+function priceOf(v){return isWholesale()?v.wholesale:v.retail;}
+
+/* ---------- lookups ---------- */
+function findProduct(id){return state.products.filter(function(p){return p.id===id;})[0];}
+function findVariant(id){for(var i=0;i<state.products.length;i++){var vs=state.products[i].variants;for(var j=0;j<vs.length;j++)if(vs[j].id===id)return {p:state.products[i],v:vs[j]};}return null;}
+function cartCount(){return cart.reduce(function(a,l){return a+l.qty;},0);}
+function cartLines(){return cart.map(function(l){var fv=findVariant(l.vid);if(!fv)return null;return {vid:l.vid,qty:l.qty,p:fv.p,v:fv.v,unit:priceOf(fv.v)};}).filter(Boolean);}
+function cartSubtotal(){return cartLines().reduce(function(a,l){return a+l.unit*l.qty;},0);}
+function orderTotal(o){var s=o.items.reduce(function(a,i){return a+i.unit*i.qty;},0);return s+(o.delivery||0);}
+
+/* ---------- routing ---------- */
+function go(hash){location.hash=hash;}
+function parse(){var h=location.hash||'#/shop';var m=h.replace(/^#\//,'').split('/');return {view:m[0]||'shop',id:m[1]||'',sub:m[2]||''};}
+
+function render(){
+  var r=parse(), a=$('#app');
+  var p=persona();
+  // guard: non-admin trying admin routes
+  if(r.view==='admin' && p.role!=='admin'){a.innerHTML=guardAdmin();buildNav();syncHeader();return;}
+  var html='';
+  switch(r.view){
+    case 'shop':html=viewShop();break;
+    case 'product':html=viewProduct(r.id);break;
+    case 'cart':html=viewCart();break;
+    case 'checkout':html=viewCheckout();break;
+    case 'confirm':html=viewConfirm(r.id);break;
+    case 'distributor':html=viewDistributor();break;
+    case 'admin':html=viewAdmin(r.id||'dashboard');break;
+    default:html=viewShop();
+  }
+  a.innerHTML=html;
+  buildNav();syncHeader();window.scrollTo(0,0);
+}
+
+/* ---------- header / nav ---------- */
+function syncHeader(){
+  $('#cartbadge').textContent=cartCount();
+  var admin=persona().role==='admin';
+  $('#cartbtn').style.display=admin?'none':'';
+  var sel=$('#persona');
+  if(sel.options.length===0){Object.keys(PERSONAS).forEach(function(k){var o=document.createElement('option');o.value=k;o.textContent=k;sel.appendChild(o);});}
+  sel.value=session.personaName;
+}
+function buildNav(){
+  var admin=persona().role==='admin', r=parse(), items;
+  if(admin){items=[['#/admin/dashboard','Dashboard','dashboard'],['#/admin/products','Products & stock','products'],['#/admin/orders','Orders','orders'],['#/admin/approvals','Distributors','approvals'],['#/admin/settings','Settings','settings']];}
+  else{items=[['#/shop','Shop','shop'],['#/cart','Cart','cart'],['#/distributor','Become a distributor','distributor']];}
+  $('#nav').innerHTML=items.map(function(it){
+    var active=(admin&&r.view==='admin'&&(r.id||'dashboard')===it[2])||(!admin&&r.view===it[2]);
+    return '<button data-act="go" data-view="'+it[0]+'" class="'+(active?'active':'')+'">'+it[1]+'</button>';
+  }).join('');
+}
+
+/* ---------- SHOP ---------- */
+function viewShop(){
+  var wh=isWholesale();
+  var banner=wh?'<div class="note">✅ You are viewing <b>wholesale (distributor) prices</b>. Retail shoppers see higher prices.</div>'
+                 :'<div class="note">You are viewing <b>retail prices</b>. Approved distributors see lower wholesale prices — try the “Approved distributor” persona above.</div>';
+  var cards=state.products.map(function(p){
+    var v=p.variants[0];var price=priceOf(v);
+    var was=wh?'<span class="was">'+zar(v.retail)+'</span>':'';
+    return '<div class="product" data-act="go" data-view="#/product/'+p.id+'" style="cursor:pointer">'
+      +'<div class="pimg">'+p.emoji+'</div><div class="pbody">'
+      +'<div class="pcat">'+esc(p.cat)+'</div><div class="pname">'+esc(p.name)+'</div>'
+      +'<div class="psize">from '+v.kg+' kg</div>'
+      +'<div class="pprice">'+zar(price)+' <span style="font-size:12px;font-weight:500;color:var(--muted)">/ '+v.kg+'kg</span>'+was+'</div>'
+      +'<div style="flex:1"></div><button class="btn btn-primary btn-sm btn-block" data-act="view" data-view="#/product/'+p.id+'">View sizes</button>'
+      +'</div></div>';
+  }).join('');
+  return '<div class="h1">Order maize meal</div><p class="sub">Fresh from the mill · delivered or collected · pay online or by EFT</p>'
+    +banner+'<div class="grid products">'+cards+'</div>';
+}
+
+var detailSel={}; // productId -> {vid, qty}
+function viewProduct(id){
+  var p=findProduct(id);if(!p)return '<p>Product not found.</p>';
+  var sel=detailSel[id]||(detailSel[id]={vid:p.variants[0].id,qty:1});
+  if(!findVariant(sel.vid)||findVariant(sel.vid).p.id!==id){sel.vid=p.variants[0].id;}
+  var v=findVariant(sel.vid).v;var price=priceOf(v);var wh=isWholesale();
+  var sizes=p.variants.map(function(x){
+    var out=x.stock<=0;
+    return '<button data-act="size" data-id="'+id+'" data-vid="'+x.id+'" class="'+(x.id===sel.vid?'active':'')+'"'+(out?' disabled':'')+'>'+x.kg+' kg'+(out?' (out)':'')+'</button>';
+  }).join('');
+  var stockMsg=v.stock<=0?'<span class="pill red">Out of stock</span>':(v.stock<=state.settings.lowStock?'<span class="pill amber">Low stock — '+v.stock+' left</span>':'<span class="pill green">In stock</span>');
+  var was=wh?'<span class="was">'+zar(v.retail)+'</span>':'';
+  var saving=wh?'<div style="color:var(--green);font-weight:700;font-size:14px">You save '+zar(v.retail-v.wholesale)+' (wholesale)</div>':'';
+  return '<button class="crumb" data-act="go" data-view="#/shop">‹ Back to shop</button>'
+    +'<div class="detail"><div class="pimg">'+p.emoji+'</div><div>'
+    +'<div class="pcat">'+esc(p.cat)+'</div><div class="h1" style="margin-top:0">'+esc(p.name)+'</div>'
+    +'<p class="sub">'+esc(p.desc)+'</p>'
+    +'<label>Size (KG)</label><div class="sizes">'+sizes+'</div>'
+    +'<div class="pprice" style="margin:14px 0 2px">'+zar(price)+' '+was+(wh?' <span class="tag-whole">WHOLESALE</span>':'')+'</div>'+saving
+    +'<div style="margin:10px 0">'+stockMsg+'</div>'
+    +'<label>Quantity</label><div class="qty"><button data-act="qty" data-id="'+id+'" data-d="-1">−</button><span>'+sel.qty+'</span><button data-act="qty" data-id="'+id+'" data-d="1">+</button></div>'
+    +'<div style="margin-top:18px"><button class="btn btn-primary btn-block" data-act="add" data-id="'+id+'"'+(v.stock<=0?' disabled':'')+'>Add to cart · '+zar(price*sel.qty)+'</button></div>'
+    +'<div class="note">🌽 Maize meal is a <b>zero-rated</b> staple in South Africa — <b>no 15% VAT</b> is charged on it.</div>'
+    +'</div></div>';
+}
+
+/* ---------- CART ---------- */
+function viewCart(){
+  var lines=cartLines();
+  if(!lines.length)return '<div class="h1">Your cart</div><div class="empty"><div class="big">🛒</div><p>Your cart is empty.</p><button class="btn btn-primary" data-act="go" data-view="#/shop">Browse products</button></div>';
+  var rows=lines.map(function(l){
+    return '<tr><td><b>'+esc(l.p.name)+'</b><br><span class="psize">'+l.v.kg+' kg'+(isWholesale()?' · wholesale':'')+'</span></td>'
+      +'<td>'+zar(l.unit)+'</td>'
+      +'<td><div class="qty"><button data-act="cqty" data-vid="'+l.vid+'" data-d="-1">−</button><span>'+l.qty+'</span><button data-act="cqty" data-vid="'+l.vid+'" data-d="1">+</button></div></td>'
+      +'<td><b>'+zar(l.unit*l.qty)+'</b></td>'
+      +'<td><button class="link" data-act="cremove" data-vid="'+l.vid+'">Remove</button></td></tr>';
+  }).join('');
+  return '<div class="h1">Your cart</div>'
+    +'<div class="tablewrap"><table><thead><tr><th>Item</th><th>Unit</th><th>Qty</th><th>Line total</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+    +'<div class="card" style="margin-top:14px;max-width:360px;margin-left:auto">'
+    +'<div class="sumrow"><span>Subtotal</span><b>'+zar(cartSubtotal())+'</b></div>'
+    +'<div class="sumrow"><span>VAT (zero-rated food)</span><b>'+zar(0)+'</b></div>'
+    +'<div class="sumrow total"><span>Total</span><span>'+zar(cartSubtotal())+'</span></div>'
+    +'<button class="btn btn-primary btn-block" style="margin-top:12px" data-act="go" data-view="#/checkout">Checkout</button>'
+    +'<p class="psize" style="text-align:center;margin:8px 0 0">+ delivery fee if delivered</p></div>';
+}
+
+/* ---------- CHECKOUT ---------- */
+var checkoutState={fulfillment:'delivery',payment:'online'};
+function viewCheckout(){
+  var lines=cartLines();
+  if(!lines.length)return '<div class="empty"><div class="big">🛒</div><p>Your cart is empty.</p><button class="btn btn-primary" data-act="go" data-view="#/shop">Browse products</button></div>';
+  var f=checkoutState.fulfillment,pay=checkoutState.payment;
+  var deliv=f==='delivery'?state.settings.deliveryFee:0;
+  var total=cartSubtotal()+deliv;
+  var depotOpts=state.settings.depots.map(function(d){return '<option>'+esc(d)+'</option>';}).join('');
+  var s=state.settings;
+  return '<button class="crumb" data-act="go" data-view="#/cart">‹ Back to cart</button><div class="h1">Checkout</div>'
+    +'<div class="detail" style="grid-template-columns:1.3fr .9fr">'
+    +'<form id="checkoutForm"><div class="card">'
+      +'<b>Your details</b>'
+      +'<div class="row2"><div><label>Full name</label><input type="text" name="name" required value="'+esc(persona().name==='Guest'?'':persona().name)+'"></div>'
+      +'<div><label>Phone</label><input type="tel" name="phone" required placeholder="082 000 0000"></div></div>'
+      +'<label>Email</label><input type="email" name="email" required placeholder="you@email.com">'
+    +'</div>'
+    +'<div class="card" style="margin-top:12px"><b>How would you like to receive it?</b>'
+      +'<label class="radio '+(f==='delivery'?'sel':'')+'"><input type="radio" name="fulfillment" value="delivery" '+(f==='delivery'?'checked':'')+'><div><div class="t">🚚 Delivery</div><div class="d">To your address · '+zar(state.settings.deliveryFee)+' fee</div></div></label>'
+      +'<label class="radio '+(f==='collection'?'sel':'')+'"><input type="radio" name="fulfillment" value="collection" '+(f==='collection'?'checked':'')+'><div><div class="t">🏬 Collection</div><div class="d">Pick up at a depot · free</div></div></label>'
+      +(f==='delivery'?'<label>Delivery address</label><textarea name="address" required placeholder="Street, suburb, city, postal code"></textarea>'
+                      :'<label>Collect from</label><select name="depot">'+depotOpts+'</select>')
+    +'</div>'
+    +'<div class="card" style="margin-top:12px"><b>Payment method</b>'
+      +'<label class="radio '+(pay==='online'?'sel':'')+'"><input type="radio" name="payment" value="online" '+(pay==='online'?'checked':'')+'><div><div class="t">💳 Pay online now</div><div class="d">Card, Instant EFT, Ozow, SnapScan (via PayFast)</div></div></label>'
+      +'<label class="radio '+(pay==='eft'?'sel':'')+'"><input type="radio" name="payment" value="eft" '+(pay==='eft'?'checked':'')+'><div><div class="t">🏦 Manual EFT</div><div class="d">Pay from your banking app, upload proof, we verify</div></div></label>'
+      +(pay==='eft'?'<div class="bank" style="margin-top:6px"><div><span>Bank</span><b>'+esc(s.bankName)+'</b></div><div><span>Account name</span><b>'+esc(s.accName)+'</b></div><div><span>Account no.</span><b>'+esc(s.accNo)+'</b></div><div><span>Branch code</span><b>'+esc(s.branch)+'</b></div><div><span>Reference</span><b>your order number</b></div></div><p class="psize">You can upload proof of payment on the confirmation screen.</p>':'')
+    +'</div></form>'
+    +'<div><div class="card"><b>Order summary</b>'
+      +lines.map(function(l){return '<div class="sumrow"><span>'+esc(l.p.name)+' '+l.v.kg+'kg × '+l.qty+'</span><b>'+zar(l.unit*l.qty)+'</b></div>';}).join('')
+      +'<div class="sumrow"><span>Delivery</span><b>'+zar(deliv)+'</b></div>'
+      +'<div class="sumrow"><span>VAT (zero-rated food)</span><b>'+zar(0)+'</b></div>'
+      +'<div class="sumrow total"><span>Total</span><span>'+zar(total)+'</span></div>'
+      +'<button class="btn btn-primary btn-block" style="margin-top:12px" data-act="placeorder">'+(pay==='online'?'Pay '+zar(total)+' now':'Place order · pay by EFT')+'</button>'
+    +'</div></div></div>';
+}
+
+/* ---------- CONFIRMATION ---------- */
+function viewConfirm(number){
+  var o=state.orders.filter(function(x){return x.number===number;})[0];
+  if(!o)return '<p>Order not found.</p>';
+  var st=STATUS[o.status];
+  var eftPending=o.payment==='eft'&&o.status==='pending';
+  return '<div class="card" style="max-width:560px;margin:0 auto;text-align:center">'
+    +'<div style="font-size:54px">'+(o.status==='pending'?'⏳':'✅')+'</div>'
+    +'<div class="h1">'+(o.status==='pending'?'Order placed':'Payment successful')+'</div>'
+    +'<p class="sub">Order <b>'+o.number+'</b> · <span class="pill '+st.c+'">'+st.label+'</span></p>'
+    +(o.payment==='online'?'<div class="note" style="text-align:left">💳 This is a <b>demo</b> — in the real app this payment would be processed by PayFast and confirmed automatically.</div>':'')
+    +(eftPending?'<div class="note" style="text-align:left">🏦 Please pay <b>'+zar(orderTotal(o))+'</b> by EFT using reference <b>'+o.number+'</b>, then upload your proof of payment below. An admin will verify it.<div class="bank" style="margin-top:8px"><div><span>Bank</span><b>'+esc(state.settings.bankName)+'</b></div><div><span>Account no.</span><b>'+esc(state.settings.accNo)+'</b></div><div><span>Branch</span><b>'+esc(state.settings.branch)+'</b></div></div>'
+        +(o.proof?'<p style="margin-top:8px">✅ Proof uploaded: <b>'+esc(o.proof)+'</b> — awaiting verification.</p>':'<label style="margin-top:8px">Upload proof of payment</label><input type="file" data-act="uploadproof" data-num="'+o.number+'">')+'</div>':'')
+    +'<div style="text-align:left;margin-top:12px" class="card">'
+      +o.items.map(function(i){return '<div class="sumrow"><span>'+esc(i.name)+' '+i.kg+'kg × '+i.qty+'</span><b>'+zar(i.unit*i.qty)+'</b></div>';}).join('')
+      +'<div class="sumrow"><span>Delivery</span><b>'+zar(o.delivery||0)+'</b></div>'
+      +'<div class="sumrow total"><span>Total</span><span>'+zar(orderTotal(o))+'</span></div>'
+      +'<div class="sumrow"><span>'+(o.fulfillment==='delivery'?'Deliver to':'Collect from')+'</span><b style="text-align:right;max-width:60%">'+esc(o.fulfillment==='delivery'?o.address:o.depot)+'</b></div>'
+    +'</div>'
+    +'<button class="btn btn-primary btn-block" style="margin-top:14px" data-act="go" data-view="#/shop">Continue shopping</button>'
+    +'<p class="psize" style="margin-top:8px">Tip: switch to the <b>Admin</b> persona (top-right) to see this order in the admin console.</p>'
+    +'</div>';
+}
+
+/* ---------- BECOME A DISTRIBUTOR ---------- */
+function viewDistributor(){
+  return '<div class="h1">Become a distributor</div><p class="sub">Register your business to unlock <b>wholesale pricing</b> and bulk ordering. An admin reviews and approves each application.</p>'
+    +'<form id="distForm" class="card" style="max-width:520px">'
+    +'<div class="row2"><div><label>Business name</label><input type="text" name="business" required></div><div><label>Contact person</label><input type="text" name="name" required></div></div>'
+    +'<div class="row2"><div><label>Phone</label><input type="tel" name="phone" required></div><div><label>Email</label><input type="email" name="email" required></div></div>'
+    +'<button class="btn btn-primary btn-block" style="margin-top:14px" data-act="submitdist">Submit application</button>'
+    +'<p class="psize" style="text-align:center">Switch to the <b>Admin</b> persona to approve applications.</p>'
+    +'</form>';
+}
+
+/* ---------- ADMIN ---------- */
+function guardAdmin(){return '<div class="empty"><div class="big">🔒</div><p>The admin console requires the <b>Admin</b> persona.</p><button class="btn btn-primary" data-act="beadmin">Switch to Admin</button></div>';}
+
+function viewAdmin(sub){
+  if(sub==='products')return adminProducts();
+  if(sub==='orders')return adminOrders();
+  if(sub==='approvals')return adminApprovals();
+  if(sub==='settings')return adminSettings();
+  return adminDashboard();
+}
+function revenueStatuses(){return ['paid','preparing','ready','out_for_delivery','completed'];}
+function adminDashboard(){
+  var rev=state.orders.filter(function(o){return revenueStatuses().indexOf(o.status)>=0;}).reduce(function(a,o){return a+orderTotal(o);},0);
+  var pendingEft=state.orders.filter(function(o){return o.payment==='eft'&&o.status==='pending';}).length;
+  var openOrders=state.orders.filter(function(o){return ['pending','paid','preparing','ready','out_for_delivery'].indexOf(o.status)>=0;}).length;
+  var pendDist=state.distributors.filter(function(d){return d.status==='pending';}).length;
+  var low=[];state.products.forEach(function(p){p.variants.forEach(function(v){if(v.stock<=state.settings.lowStock)low.push({p:p,v:v});});});
+  // revenue by product
+  var byProd={};state.orders.filter(function(o){return revenueStatuses().indexOf(o.status)>=0;}).forEach(function(o){o.items.forEach(function(i){byProd[i.name]=(byProd[i.name]||0)+i.unit*i.qty;});});
+  var names=Object.keys(byProd);var max=Math.max.apply(null,names.map(function(n){return byProd[n];}).concat([1]));
+  var bars=names.map(function(n){return '<div class="bar"><span>'+esc(n)+'</span><div class="track"><div class="fill" style="width:'+Math.round(byProd[n]/max*100)+'%"></div></div><b style="text-align:right">'+zar(byProd[n])+'</b></div>';}).join('')||'<p class="sub">No sales yet.</p>';
+  var lowRows=low.length?low.map(function(x){return '<tr><td>'+esc(x.p.name)+'</td><td>'+x.v.kg+' kg</td><td><span class="pill '+(x.v.stock<=0?'red':'amber')+'">'+x.v.stock+' left</span></td></tr>';}).join('')
+    :'<tr><td colspan="3" class="sub" style="padding:14px">All stock levels healthy 👍</td></tr>';
+  return '<div class="h1">Dashboard</div><p class="sub">Live overview · Suthisa Foods (demo data)</p>'
+    +'<div class="grid stats">'
+    +'<div class="stat"><div class="n">'+zar(rev)+'</div><div class="l">Revenue (paid orders)</div></div>'
+    +'<div class="stat"><div class="n">'+openOrders+'</div><div class="l">Open orders</div></div>'
+    +'<div class="stat '+(pendingEft?'alert':'')+'"><div class="n">'+pendingEft+'</div><div class="l">EFT payments to verify</div></div>'
+    +'<div class="stat '+(pendDist?'alert':'')+'"><div class="n">'+pendDist+'</div><div class="l">Distributors to approve</div></div>'
+    +'<div class="stat '+(low.length?'alert':'')+'"><div class="n">'+low.length+'</div><div class="l">Low-stock items</div></div>'
+    +'</div>'
+    +'<div class="detail" style="grid-template-columns:1.2fr .8fr;margin-top:16px">'
+    +'<div class="card"><b>Revenue by product</b><div style="margin-top:10px">'+bars+'</div></div>'
+    +'<div class="card"><b>Low-stock alerts</b><div class="tablewrap" style="margin-top:8px;border:0"><table style="min-width:0"><thead><tr><th>Product</th><th>Size</th><th>Stock</th></tr></thead><tbody>'+lowRows+'</tbody></table></div></div>'
+    +'</div>';
+}
+function adminProducts(){
+  var rows=[];
+  state.products.forEach(function(p){
+    p.variants.forEach(function(v,idx){
+      rows.push('<tr>'
+        +(idx===0?'<td rowspan="'+p.variants.length+'"><b>'+esc(p.name)+'</b><br><span class="psize">'+esc(p.cat)+'</span></td>':'')
+        +'<td>'+v.kg+' kg</td>'
+        +'<td>R <input type="number" min="0" step="0.01" class="" data-act="editprice" data-vid="'+v.id+'" data-tier="retail" value="'+(v.retail/100).toFixed(2)+'"></td>'
+        +'<td>R <input type="number" min="0" step="0.01" data-act="editprice" data-vid="'+v.id+'" data-tier="wholesale" value="'+(v.wholesale/100).toFixed(2)+'"></td>'
+        +'<td><input type="number" min="0" class="stock" data-act="editstock" data-vid="'+v.id+'" value="'+v.stock+'"> '+(v.stock<=state.settings.lowStock?'<span class="pill '+(v.stock<=0?'red':'amber')+'">low</span>':'')+'</td>'
+        +'</tr>');
+    });
+  });
+  return '<div class="h1">Products &amp; stock</div><p class="sub">Edit retail/wholesale prices (Rands) and stock. Changes save automatically.</p>'
+    +'<div class="tablewrap"><table><thead><tr><th>Product</th><th>Size</th><th>Retail</th><th>Wholesale</th><th>Stock</th></tr></thead><tbody>'+rows.join('')+'</tbody></table></div>'
+    +'<details class="card" style="margin-top:14px"><summary style="font-weight:700;cursor:pointer">➕ Add a new product</summary>'
+    +'<form id="addProd"><div class="row2"><div><label>Product name</label><input type="text" name="name" required placeholder="e.g. Maize Rice"></div><div><label>Category</label><input type="text" name="cat" value="Staples"></div></div>'
+    +'<div class="row2"><div><label>Size (kg)</label><input type="number" name="kg" value="10" min="1"></div><div><label>Stock</label><input type="number" name="stock" value="50" min="0"></div></div>'
+    +'<div class="row2"><div><label>Retail price (R)</label><input type="number" name="retail" value="99.99" step="0.01"></div><div><label>Wholesale price (R)</label><input type="number" name="wholesale" value="85.00" step="0.01"></div></div>'
+    +'<button class="btn btn-primary" style="margin-top:12px" data-act="addprod">Add product</button></form></details>';
+}
+function adminApprovals(){
+  var rows=state.distributors.map(function(d){
+    var pill=d.status==='pending'?'<span class="pill amber">Pending</span>':(d.status==='approved'?'<span class="pill green">Approved</span>':'<span class="pill red">Rejected</span>');
+    var actions=d.status==='pending'?'<button class="btn btn-primary btn-sm" data-act="approve" data-id="'+d.id+'">Approve</button> <button class="btn btn-ghost btn-sm" data-act="reject" data-id="'+d.id+'">Reject</button>':'—';
+    return '<tr><td><b>'+esc(d.business)+'</b></td><td>'+esc(d.name)+'</td><td>'+esc(d.phone)+'<br><span class="psize">'+esc(d.email)+'</span></td><td>'+pill+'</td><td>'+actions+'</td></tr>';
+  }).join('');
+  return '<div class="h1">Distributor applications</div><p class="sub">Approve a business to grant it wholesale pricing.</p>'
+    +'<div class="tablewrap"><table><thead><tr><th>Business</th><th>Contact</th><th>Details</th><th>Status</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+function adminOrders(){
+  var rows=state.orders.slice().reverse().map(function(o){
+    var st=STATUS[o.status];
+    var opts=nextStatuses(o).map(function(s){return '<option value="'+s+'">→ '+STATUS[s].label+'</option>';}).join('');
+    var setter=opts?'<select data-act="setstatus" data-num="'+o.number+'"><option value="">Change status…</option>'+opts+'</select>':'<span class="psize">—</span>';
+    var verify=(o.payment==='eft'&&o.status==='pending')?'<button class="btn btn-primary btn-sm" data-act="verify" data-num="'+o.number+'">✓ Verify EFT</button>':'';
+    var proof=o.proof?'<br><span class="psize">📎 '+esc(o.proof)+'</span>':(o.payment==='eft'?'<br><span class="psize">no proof yet</span>':'');
+    return '<tr><td><b>'+o.number+'</b><br><span class="psize">'+o.when+'</span></td>'
+      +'<td>'+esc(o.customer)+(o.tier==='wholesale'?' <span class="tag-whole">WHOLE</span>':'')+'</td>'
+      +'<td>'+(o.fulfillment==='delivery'?'🚚 Delivery':'🏬 Collection')+'</td>'
+      +'<td>'+(o.payment==='online'?'💳 Online':'🏦 EFT')+proof+'</td>'
+      +'<td><b>'+zar(orderTotal(o))+'</b></td>'
+      +'<td><span class="pill '+st.c+'">'+st.label+'</span></td>'
+      +'<td>'+verify+' '+setter+'</td></tr>';
+  }).join('');
+  return '<div class="h1">Orders</div><p class="sub">Verify EFT payments and move orders through fulfilment.</p>'
+    +'<div class="tablewrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Fulfil</th><th>Payment</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+function adminSettings(){
+  var s=state.settings;
+  return '<div class="h1">Settings</div><p class="sub">Business details used across the store (demo).</p>'
+    +'<form id="setForm" class="card" style="max-width:560px"><b>Banking details (for manual EFT)</b>'
+    +'<label>Bank</label><input type="text" name="bankName" value="'+esc(s.bankName)+'">'
+    +'<div class="row2"><div><label>Account name</label><input type="text" name="accName" value="'+esc(s.accName)+'"></div><div><label>Account number</label><input type="text" name="accNo" value="'+esc(s.accNo)+'"></div></div>'
+    +'<div class="row2"><div><label>Branch code</label><input type="text" name="branch" value="'+esc(s.branch)+'"></div><div><label>Delivery fee (R)</label><input type="number" name="deliveryFee" step="0.01" value="'+(s.deliveryFee/100).toFixed(2)+'"></div></div>'
+    +'<label>Low-stock alert threshold (units)</label><input type="number" name="lowStock" value="'+s.lowStock+'">'
+    +'<button class="btn btn-primary" style="margin-top:14px" data-act="savesettings">Save settings</button></form>';
+}
+
+/* ---------- actions ---------- */
+document.addEventListener('click',function(e){
+  var t=e.target.closest('[data-act]');if(!t)return;
+  var act=t.getAttribute('data-act');
+  if(act==='go'||act==='view'){go(t.getAttribute('data-view'));return;}
+  if(act==='reset'){if(confirm('Reset all demo data to the original sample?')){LS.removeItem(KEY);LS.removeItem(KEY+'-cart');cart=[];load();go('#/shop');render();toast('Demo data reset');}return;}
+  if(act==='beadmin'){session.personaName='Admin';save();$('#persona').value='Admin';go('#/admin/dashboard');render();return;}
+  var id=t.getAttribute('data-id'), vid=t.getAttribute('data-vid'), num=t.getAttribute('data-num');
+
+  if(act==='size'){detailSel[id].vid=vid;detailSel[id].qty=1;render();return;}
+  if(act==='qty'){var sl=detailSel[id];sl.qty=Math.max(1,sl.qty+parseInt(t.getAttribute('data-d'),10));render();return;}
+  if(act==='add'){var sl2=detailSel[id];addToCart(sl2.vid,sl2.qty);toast('Added to cart');go('#/cart');return;}
+  if(act==='cqty'){changeCartQty(vid,parseInt(t.getAttribute('data-d'),10));render();return;}
+  if(act==='cremove'){cart=cart.filter(function(l){return l.vid!==vid;});save();render();toast('Removed');return;}
+  if(act==='placeorder'){placeOrder();return;}
+
+  if(act==='approve'){setDist(id,'approved');toast('Distributor approved');return;}
+  if(act==='reject'){setDist(id,'rejected');toast('Application rejected');return;}
+  if(act==='verify'){setOrderStatus(num,'paid');toast('EFT payment verified · marked Paid');return;}
+  if(act==='addprod'){e.preventDefault();addProduct();return;}
+  if(act==='savesettings'){e.preventDefault();saveSettings();return;}
+  if(act==='submitdist'){e.preventDefault();submitDistributor();return;}
+});
+document.addEventListener('change',function(e){
+  var t=e.target;
+  if(t.id==='persona'){session.personaName=t.value;save();var r=parse();if(persona().role==='admin')go('#/admin/dashboard');else if(r.view==='admin')go('#/shop');else render();return;}
+  var act=t.getAttribute&&t.getAttribute('data-act');if(!act)return;
+  if(act==='setstatus'&&t.value){setOrderStatus(t.getAttribute('data-num'),t.value);toast('Status updated');return;}
+  if(act==='editprice'){var fv=findVariant(t.getAttribute('data-vid'));if(fv){fv.v[t.getAttribute('data-tier')]=Math.round(parseFloat(t.value||0)*100);save();toast('Price updated');}return;}
+  if(act==='editstock'){var fv2=findVariant(t.getAttribute('data-vid'));if(fv2){fv2.v.stock=parseInt(t.value||0,10);save();render();toast('Stock updated');}return;}
+  if(act==='uploadproof'){var o=orderByNum(t.getAttribute('data-num'));if(o){o.proof=(t.files&&t.files[0]?t.files[0].name:'proof.jpg');save();render();toast('Proof uploaded');}return;}
+});
+// keep checkout radios reactive
+document.addEventListener('change',function(e){
+  if(e.target.name==='fulfillment'){checkoutState.fulfillment=e.target.value;render();}
+  if(e.target.name==='payment'){checkoutState.payment=e.target.value;render();}
+});
+
+/* ---------- mutations ---------- */
+function addToCart(vid,qty){var l=cart.filter(function(x){return x.vid===vid;})[0];if(l)l.qty+=qty;else cart.push({vid:vid,qty:qty});save();}
+function changeCartQty(vid,d){var l=cart.filter(function(x){return x.vid===vid;})[0];if(!l)return;l.qty+=d;if(l.qty<=0)cart=cart.filter(function(x){return x.vid!==vid;});save();}
+function orderByNum(n){return state.orders.filter(function(o){return o.number===n;})[0];}
+function setOrderStatus(n,s){var o=orderByNum(n);if(o){o.status=s;save();render();}}
+function setDist(id,s){var d=state.distributors.filter(function(x){return x.id===id;})[0];if(d){d.status=s;save();render();}}
+
+function placeOrder(){
+  var form=$('#checkoutForm');if(!form.reportValidity())return;
+  var fd=new FormData(form);var f=checkoutState.fulfillment,pay=checkoutState.payment;
+  var lines=cartLines();if(!lines.length)return;
+  var num='ORD-'+(state.orderSeq++);
+  var o={number:num,when:'just now',customer:fd.get('name'),tier:isWholesale()?'wholesale':'retail',
+    fulfillment:f,payment:pay,status:pay==='online'?'paid':'pending',proof:null,
+    address:f==='delivery'?fd.get('address'):null,depot:f==='collection'?fd.get('depot'):null,
+    delivery:f==='delivery'?state.settings.deliveryFee:0,
+    items:lines.map(function(l){return {name:l.p.name,kg:l.v.kg,qty:l.qty,unit:l.unit};})};
+  // decrement stock
+  lines.forEach(function(l){var fv=findVariant(l.vid);if(fv)fv.v.stock=Math.max(0,fv.v.stock-l.qty);});
+  state.orders.push(o);cart=[];save();
+  go('#/confirm/'+num);render();
+}
+function addProduct(){
+  var form=$('#addProd');if(!form.reportValidity())return;var fd=new FormData(form);
+  var pid='p'+(Date.now());
+  state.products.push({id:pid,name:fd.get('name'),cat:fd.get('cat')||'Staples',emoji:'🌾',desc:'Added via admin (demo).',
+    variants:[{id:pid+'a',kg:parseInt(fd.get('kg'),10)||10,retail:Math.round(parseFloat(fd.get('retail'))*100),wholesale:Math.round(parseFloat(fd.get('wholesale'))*100),stock:parseInt(fd.get('stock'),10)||0}]});
+  save();render();toast('Product added');
+}
+function saveSettings(){
+  var form=$('#setForm');var fd=new FormData(form);var s=state.settings;
+  s.bankName=fd.get('bankName');s.accName=fd.get('accName');s.accNo=fd.get('accNo');s.branch=fd.get('branch');
+  s.deliveryFee=Math.round(parseFloat(fd.get('deliveryFee'))*100);s.lowStock=parseInt(fd.get('lowStock'),10)||0;
+  save();render();toast('Settings saved');
+}
+function submitDistributor(){
+  var form=$('#distForm');if(!form.reportValidity())return;var fd=new FormData(form);
+  state.distributors.push({id:'d'+Date.now(),business:fd.get('business'),name:fd.get('name'),phone:fd.get('phone'),email:fd.get('email'),status:'pending'});
+  save();toast('Application submitted — awaiting approval');go('#/shop');render();
+}
+
+/* ---------- boot ---------- */
+load();
+window.addEventListener('hashchange',render);
+if(!location.hash)location.hash='#/shop';
+render();
+})();
+</script>
+</body>
+</html>
