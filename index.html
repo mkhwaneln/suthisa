@@ -214,18 +214,15 @@ var SEED={
       {id:'p3c',kg:10,retail:16999,wholesale:14200,stock:25}
     ]}
   ],
-  distributors:[
-    {id:'d0',business:'Kagiso Wholesalers',name:'Kagiso Mahlangu',phone:'083 111 2222',email:'kagiso@kagisowholesalers.co.za',status:'approved'},
-    {id:'d1',business:'Ubuntu Spaza Group',name:'Bongani Khumalo',phone:'082 555 1122',email:'bongani@ubuntuspaza.co.za',status:'pending'},
-    {id:'d2',business:'Green Valley Traders',name:'Aisha Patel',phone:'071 444 8899',email:'aisha@greenvalley.co.za',status:'pending'}
-  ],
+  distributors:[],
+  dealRequests:[],
   orders:[]
 };
 
 var PERSONAS={
   'Guest':{role:'shop',wholesale:false,name:'Guest'},
   'Retail customer':{role:'shop',wholesale:false,name:'Nomsa Dlamini'},
-  'Approved distributor':{role:'shop',wholesale:true,name:'Kagiso Wholesalers',distId:'d0'},
+  'Approved distributor':{role:'shop',wholesale:true,name:'Kagiso Wholesalers'},
   'Admin':{role:'admin',wholesale:false,name:'Admin'}
 };
 
@@ -247,13 +244,14 @@ function nextStatuses(o){
 }
 
 /* ---------- state ---------- */
-var KEY='suthisa-demo-v3', state, session={personaName:'Guest'}, cart=[];
+var KEY='suthisa-demo-v4', state, session={personaName:'Guest'}, cart=[];
 function load(){
   try{var s=JSON.parse(LS.getItem(KEY));}catch(e){s=null;}
   state=s||JSON.parse(JSON.stringify(SEED));
   try{cart=JSON.parse(LS.getItem(KEY+'-cart'))||[];}catch(e){cart=[];}
   try{session.personaName=LS.getItem(KEY+'-persona')||'Guest';}catch(e){session.personaName='Guest';}
   if(AUTH[session.personaName] && !authed[session.personaName]) session.personaName='Guest';  // protected personas must log in each session
+  if(!state.dealRequests) state.dealRequests=[];  // safety for older cached state
 }
 function save(){try{LS.setItem(KEY,JSON.stringify(state));LS.setItem(KEY+'-cart',JSON.stringify(cart));LS.setItem(KEY+'-persona',session.personaName);}catch(e){}}
 function persona(){return PERSONAS[session.personaName]||PERSONAS.Guest;}
@@ -263,8 +261,7 @@ function priceOf(v){return isWholesale()?v.wholesale:v.retail;}
 /* ---------- auth & ordering permissions ---------- */
 var AUTH={'Admin':'admin123','Approved distributor':'kagiso123'};  // demo passwords (change freely)
 var authed={}, pendingPersona=null;                                // authed resets on reload (in-memory only)
-function distByPersona(){var p=PERSONAS[session.personaName];return (p&&p.distId)?state.distributors.filter(function(x){return x.id===p.distId;})[0]:null;}
-function canOrder(){var d=distByPersona();return !!(d && d.status==='approved');}  // only an approved distributor may order
+function canOrder(){return session.personaName==='Approved distributor';}  // only a logged-in approved distributor may order
 function openLogin(name){pendingPersona=name;$('#loginTitle').textContent='Log in as '+name;$('#loginHint').textContent='Demo password: '+AUTH[name];var pw=$('#loginPw');pw.value='';$('#loginModal').classList.add('show');setTimeout(function(){try{pw.focus();}catch(e){}},40);}
 function closeLogin(){$('#loginModal').classList.remove('show');pendingPersona=null;}
 function doLogin(){var pw=$('#loginPw').value;if(pendingPersona&&pw===AUTH[pendingPersona]){authed[pendingPersona]=true;var target=pendingPersona;pendingPersona=null;$('#loginModal').classList.remove('show');session.personaName=target;save();if(persona().role==='admin')go('#/admin/dashboard');else go('#/shop');render();toast('Logged in as '+target);}else{toast('Incorrect password');}}
@@ -314,8 +311,12 @@ function syncHeader(){
 }
 function buildNav(){
   var admin=persona().role==='admin', r=parse(), items;
-  if(admin){items=[['#/admin/dashboard','Dashboard','dashboard'],['#/admin/products','Products & stock','products'],['#/admin/orders','Orders','orders'],['#/admin/approvals','Distributors','approvals'],['#/admin/settings','Settings','settings']];}
-  else{items=[['#/shop','Shop','shop'],['#/deals','Package deals','deals'],['#/cart','Cart','cart'],['#/distributor','Become a distributor','distributor']];}
+  if(admin){items=[['#/admin/dashboard','Dashboard','dashboard'],['#/admin/products','Products & stock','products'],['#/admin/orders','Orders','orders'],['#/admin/approvals','Distributors','approvals'],['#/admin/requests','Requests','requests'],['#/admin/settings','Settings','settings']];}
+  else{var pn=session.personaName;items=[['#/shop','Shop','shop']];
+    if(pn!=='Retail customer') items.push(['#/deals','Package deals','deals']);            // deals hidden for customers
+    if(pn==='Approved distributor') items.push(['#/cart','Cart','cart']);                   // cart only for approved distributors
+    if(pn==='Guest'||pn==='Retail customer') items.push(['#/distributor','Become a distributor','distributor']);  // only guests/customers
+  }
   $('#nav').innerHTML=items.map(function(it){
     var active=(admin&&r.view==='admin'&&(r.id||'dashboard')===it[2])||(!admin&&r.view===it[2]);
     return '<button data-act="go" data-view="'+it[0]+'" class="'+(active?'active':'')+'">'+it[1]+'</button>';
@@ -358,6 +359,7 @@ function viewShop(){
 /* PACKAGE DEALS — bulk offering shown to distributors before they order (from sample/Sample1.md).
    Personal contact details are intentionally omitted (this demo is published publicly). */
 function viewDeals(){
+  if(session.personaName==='Retail customer') return comingSoonCustomer();
   return '<button class="crumb" data-act="go" data-view="#/shop">‹ Back to shop</button>'
     +'<div class="h1">Bulk package deals</div><p class="sub">Save on volume — packed to suit your business</p>'
     +'<div class="card" style="border:2px solid var(--yellow)">'
@@ -376,7 +378,7 @@ function viewDeals(){
         +'<tr><td>Packaging</td><td>Customised to your preferred bag-size combination</td></tr>'
       +'</tbody></table></div>'
       +(canOrder()
-         ? '<button class="btn btn-primary btn-block" style="margin-top:6px" data-act="enquire-deal">Request this package</button>'
+         ? '<button class="btn btn-primary btn-block" style="margin-top:6px" data-act="reqdeal">Request this package</button>'
          : '<div class="note" style="margin-top:6px">🔒 Log in as an <b>approved distributor</b> (View as ▸ Approved distributor) to request this package.</div>')
       +'<p class="psize" style="text-align:center;margin-top:8px">A Suthisa representative will confirm your packaging and current price. Price is subject to the prevailing market price of maize.</p>'
     +'</div>';
@@ -412,6 +414,7 @@ function viewProduct(id){
 
 /* ---------- CART ---------- */
 function viewCart(){
+  if(!canOrder())return '<div class="h1">Your cart</div><div class="empty"><div class="big">🔒</div><p>Only approved distributors can order. Log in via <b>View as ▸ Approved distributor</b>.</p></div>';
   var lines=cartLines();
   if(!lines.length)return '<div class="h1">Your cart</div><div class="empty"><div class="big">🛒</div><p>Your cart is empty.</p><button class="btn btn-primary" data-act="go" data-view="#/shop">Browse products</button></div>';
   var rows=lines.map(function(l){
@@ -512,6 +515,7 @@ function viewAdmin(sub){
   if(sub==='products')return adminProducts();
   if(sub==='orders')return adminOrders();
   if(sub==='approvals')return adminApprovals();
+  if(sub==='requests')return adminRequests();
   if(sub==='settings')return adminSettings();
   return adminDashboard();
 }
@@ -521,6 +525,7 @@ function adminDashboard(){
   var pendingEft=state.orders.filter(function(o){return o.payment==='eft'&&o.status==='pending';}).length;
   var openOrders=state.orders.filter(function(o){return ['pending','paid','preparing','ready','out_for_delivery'].indexOf(o.status)>=0;}).length;
   var pendDist=state.distributors.filter(function(d){return d.status==='pending';}).length;
+  var pendReq=state.dealRequests.filter(function(r){return r.status==='pending';}).length;
   var low=[];state.products.forEach(function(p){p.variants.forEach(function(v){if(v.stock<=state.settings.lowStock)low.push({p:p,v:v});});});
   // revenue by product
   var byProd={};state.orders.filter(function(o){return revenueStatuses().indexOf(o.status)>=0;}).forEach(function(o){o.items.forEach(function(i){byProd[i.name]=(byProd[i.name]||0)+i.unit*i.qty;});});
@@ -534,6 +539,7 @@ function adminDashboard(){
     +'<div class="stat"><div class="n">'+openOrders+'</div><div class="l">Open orders</div></div>'
     +'<div class="stat '+(pendingEft?'alert':'')+'"><div class="n">'+pendingEft+'</div><div class="l">EFT payments to verify</div></div>'
     +'<div class="stat '+(pendDist?'alert':'')+'"><div class="n">'+pendDist+'</div><div class="l">Distributors to approve</div></div>'
+    +'<div class="stat '+(pendReq?'alert':'')+'"><div class="n">'+pendReq+'</div><div class="l">Package requests</div></div>'
     +'<div class="stat '+(low.length?'alert':'')+'"><div class="n">'+low.length+'</div><div class="l">Low-stock items</div></div>'
     +'</div>'
     +'<div class="detail" style="grid-template-columns:1.2fr .8fr;margin-top:16px">'
@@ -580,9 +586,22 @@ function adminApprovals(){
     else if(d.status==='suspended') a='<button class="btn btn-primary btn-sm" data-act="approve" data-id="'+d.id+'">Re-activate</button> <button class="btn btn-ghost btn-sm" data-act="reject" data-id="'+d.id+'">Reject</button>';
     else a='<button class="btn btn-primary btn-sm" data-act="approve" data-id="'+d.id+'">Approve</button>';
     return '<tr><td><b>'+esc(d.business)+'</b></td><td>'+esc(d.name)+'</td><td>'+esc(d.phone)+'<br><span class="psize">'+esc(d.email)+'</span></td><td>'+pill(d.status)+'</td><td>'+a+'</td></tr>';
-  }).join('');
+  }).join('')||'<tr><td colspan="5" class="psize" style="padding:14px">No distributors yet. Add an approved distributor below, or approve applications submitted via “Become a distributor”.</td></tr>';
   return '<div class="h1">Distributors</div><p class="sub">Approve applications and manage who can order. Only <b>approved</b> distributors can place orders.</p>'
-    +'<div class="tablewrap"><table><thead><tr><th>Business</th><th>Contact</th><th>Details</th><th>Status</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    +'<div class="tablewrap"><table><thead><tr><th>Business</th><th>Contact</th><th>Details</th><th>Status</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+    +'<details class="card" style="margin-top:14px"><summary style="font-weight:700;cursor:pointer">➕ Add an approved distributor</summary>'
+    +'<form id="distAddForm"><div class="row2"><div><label>Business name</label><input type="text" name="business" required></div><div><label>Contact person</label><input type="text" name="name" required></div></div>'
+    +'<div class="row2"><div><label>Phone</label><input type="tel" name="phone" required></div><div><label>Email</label><input type="email" name="email" required></div></div>'
+    +'<button class="btn btn-primary" style="margin-top:12px" data-act="adddist">Add approved distributor</button></form></details>';
+}
+function adminRequests(){
+  var rows=state.dealRequests.slice().reverse().map(function(rq){
+    var pillc=rq.status==='pending'?'amber':(rq.status==='approved'?'green':'red');
+    var a=rq.status==='pending'?'<button class="btn btn-primary btn-sm" data-act="approve-request" data-id="'+rq.id+'">Approve</button> <button class="btn btn-ghost btn-sm" data-act="decline-request" data-id="'+rq.id+'">Decline</button>':'—';
+    return '<tr><td><b>'+esc(rq.business)+'</b><br><span class="psize">'+rq.when+'</span></td><td>'+esc(rq.pkg)+'</td><td>'+esc(rq.price)+'</td><td><span class="pill '+pillc+'">'+rq.status+'</span></td><td>'+a+'</td></tr>';
+  }).join('');
+  return '<div class="h1">Package-deal requests</div><p class="sub">Bulk package requests from approved distributors, awaiting your approval.</p>'
+    +(state.dealRequests.length?'<div class="tablewrap"><table><thead><tr><th>From</th><th>Package</th><th>Price</th><th>Status</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="empty"><div class="big">📨</div><p>No package-deal requests yet.</p></div>');
 }
 function adminOrders(){
   var rows=state.orders.slice().reverse().map(function(o){
@@ -620,7 +639,7 @@ document.addEventListener('click',function(e){
   if(act==='go'||act==='view'){go(t.getAttribute('data-view'));return;}
   if(act==='login-submit'){doLogin();return;}
   if(act==='login-cancel'){closeLogin();return;}
-  if(act==='enquire-deal'){toast('Enquiry sent — Suthisa will confirm your packaging and current price');return;}
+  if(act==='reqdeal'){state.dealRequests.push({id:'req'+Date.now()+Math.floor(Math.random()*1000),business:persona().name,pkg:'8.5 Ton Maize Meal Package Deal',price:'R 60 000',when:'just now',status:'pending'});save();toast('Request sent to Suthisa for approval');return;}
   if(act==='reset'){if(confirm('Reset all demo data to the original sample?')){LS.removeItem(KEY);LS.removeItem(KEY+'-cart');cart=[];load();go('#/shop');render();toast('Demo data reset');}return;}
   if(act==='beadmin'){if(authed['Admin']){session.personaName='Admin';save();$('#persona').value='Admin';go('#/admin/dashboard');render();}else openLogin('Admin');return;}
   var id=t.getAttribute('data-id'), vid=t.getAttribute('data-vid'), num=t.getAttribute('data-num');
@@ -635,6 +654,9 @@ document.addEventListener('click',function(e){
   if(act==='approve'){setDist(id,'approved');toast('Distributor approved');return;}
   if(act==='reject'){setDist(id,'rejected');toast('Application rejected');return;}
   if(act==='suspend'){setDist(id,'suspended');toast('Distributor suspended');return;}
+  if(act==='approve-request'){var rq=state.dealRequests.filter(function(x){return x.id===id;})[0];if(rq){rq.status='approved';save();render();toast('Package request approved');}return;}
+  if(act==='decline-request'){var rq2=state.dealRequests.filter(function(x){return x.id===id;})[0];if(rq2){rq2.status='declined';save();render();toast('Package request declined');}return;}
+  if(act==='adddist'){e.preventDefault();addDistributor();return;}
   if(act==='verify'){setOrderStatus(num,'paid');toast('EFT payment verified · marked Paid');return;}
   if(act==='addprod'){e.preventDefault();addProduct();return;}
   if(act==='delproduct'){if(confirm('Delete this product and all its sizes?')){state.products=state.products.filter(function(x){return x.id!==id;});save();render();toast('Product removed');}return;}
@@ -703,6 +725,11 @@ function submitDistributor(){
   var form=$('#distForm');if(!form.reportValidity())return;var fd=new FormData(form);
   state.distributors.push({id:'d'+Date.now(),business:fd.get('business'),name:fd.get('name'),phone:fd.get('phone'),email:fd.get('email'),status:'pending'});
   save();toast('Application submitted — awaiting approval');go('#/shop');render();
+}
+function addDistributor(){
+  var form=$('#distAddForm');if(!form.reportValidity())return;var fd=new FormData(form);
+  state.distributors.push({id:'d'+Date.now(),business:fd.get('business'),name:fd.get('name'),phone:fd.get('phone'),email:fd.get('email'),status:'approved'});
+  save();render();toast('Approved distributor added');
 }
 
 /* ---------- boot ---------- */
