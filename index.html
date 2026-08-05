@@ -126,6 +126,11 @@ textarea{min-height:70px}
 .empty{text-align:center;padding:40px 16px;color:var(--muted)}
 .empty .big{font-size:50px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(30px);background:#111827;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;opacity:0;transition:.25s;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:60;padding:16px}
+.modal.show{display:flex}
+.modal-box{background:#fff;border-radius:14px;padding:22px;max-width:340px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.modal-box h3{margin:0 0 4px;color:var(--green-dark)}
+.modal-box .hint{font-size:12px;color:var(--muted);margin:0 0 12px}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .crumb{background:none;border:0;color:var(--muted);padding:0;margin-bottom:8px;font-size:14px}
 .footer{max-width:1080px;margin:20px auto 0;padding:16px 14px;color:var(--muted);font-size:12px;text-align:center}
@@ -156,6 +161,15 @@ textarea{min-height:70px}
 <main id="app"></main>
 <div class="footer">Suthisa Maize Meal — interactive demo · Rands (ZAR) · sizes in KG · <button class="link" data-act="reset">Reset demo data</button></div>
 <div class="toast" id="toast"></div>
+<div class="modal" id="loginModal"><div class="modal-box">
+  <h3 id="loginTitle">Log in</h3>
+  <p class="hint" id="loginHint"></p>
+  <input type="password" id="loginPw" placeholder="Password" autocomplete="off">
+  <div style="display:flex;gap:8px;margin-top:14px">
+    <button class="btn btn-ghost" data-act="login-cancel" style="flex:1">Cancel</button>
+    <button class="btn btn-primary" data-act="login-submit" style="flex:1">Log in</button>
+  </div>
+</div></div>
 
 <script>
 (function(){
@@ -201,6 +215,7 @@ var SEED={
     ]}
   ],
   distributors:[
+    {id:'d0',business:'Kagiso Wholesalers',name:'Kagiso Mahlangu',phone:'083 111 2222',email:'kagiso@kagisowholesalers.co.za',status:'approved'},
     {id:'d1',business:'Ubuntu Spaza Group',name:'Bongani Khumalo',phone:'082 555 1122',email:'bongani@ubuntuspaza.co.za',status:'pending'},
     {id:'d2',business:'Green Valley Traders',name:'Aisha Patel',phone:'071 444 8899',email:'aisha@greenvalley.co.za',status:'pending'}
   ],
@@ -210,7 +225,7 @@ var SEED={
 var PERSONAS={
   'Guest':{role:'shop',wholesale:false,name:'Guest'},
   'Retail customer':{role:'shop',wholesale:false,name:'Nomsa Dlamini'},
-  'Approved distributor':{role:'shop',wholesale:true,name:'Kagiso Wholesalers'},
+  'Approved distributor':{role:'shop',wholesale:true,name:'Kagiso Wholesalers',distId:'d0'},
   'Admin':{role:'admin',wholesale:false,name:'Admin'}
 };
 
@@ -232,17 +247,28 @@ function nextStatuses(o){
 }
 
 /* ---------- state ---------- */
-var KEY='suthisa-demo-v2', state, session={personaName:'Guest'}, cart=[];
+var KEY='suthisa-demo-v3', state, session={personaName:'Guest'}, cart=[];
 function load(){
   try{var s=JSON.parse(LS.getItem(KEY));}catch(e){s=null;}
   state=s||JSON.parse(JSON.stringify(SEED));
   try{cart=JSON.parse(LS.getItem(KEY+'-cart'))||[];}catch(e){cart=[];}
   try{session.personaName=LS.getItem(KEY+'-persona')||'Guest';}catch(e){session.personaName='Guest';}
+  if(AUTH[session.personaName] && !authed[session.personaName]) session.personaName='Guest';  // protected personas must log in each session
 }
 function save(){try{LS.setItem(KEY,JSON.stringify(state));LS.setItem(KEY+'-cart',JSON.stringify(cart));LS.setItem(KEY+'-persona',session.personaName);}catch(e){}}
 function persona(){return PERSONAS[session.personaName]||PERSONAS.Guest;}
 function isWholesale(){return persona().wholesale;}
 function priceOf(v){return isWholesale()?v.wholesale:v.retail;}
+
+/* ---------- auth & ordering permissions ---------- */
+var AUTH={'Admin':'admin123','Approved distributor':'kagiso123'};  // demo passwords (change freely)
+var authed={}, pendingPersona=null;                                // authed resets on reload (in-memory only)
+function distByPersona(){var p=PERSONAS[session.personaName];return (p&&p.distId)?state.distributors.filter(function(x){return x.id===p.distId;})[0]:null;}
+function canOrder(){var d=distByPersona();return !!(d && d.status==='approved');}  // only an approved distributor may order
+function openLogin(name){pendingPersona=name;$('#loginTitle').textContent='Log in as '+name;$('#loginHint').textContent='Demo password: '+AUTH[name];var pw=$('#loginPw');pw.value='';$('#loginModal').classList.add('show');setTimeout(function(){try{pw.focus();}catch(e){}},40);}
+function closeLogin(){$('#loginModal').classList.remove('show');pendingPersona=null;}
+function doLogin(){var pw=$('#loginPw').value;if(pendingPersona&&pw===AUTH[pendingPersona]){authed[pendingPersona]=true;var target=pendingPersona;pendingPersona=null;$('#loginModal').classList.remove('show');session.personaName=target;save();if(persona().role==='admin')go('#/admin/dashboard');else go('#/shop');render();toast('Logged in as '+target);}else{toast('Incorrect password');}}
+document.addEventListener('keydown',function(e){if(e.key==='Enter'&&$('#loginModal')&&$('#loginModal').classList.contains('show'))doLogin();});
 
 /* ---------- lookups ---------- */
 function findProduct(id){return state.products.filter(function(p){return p.id===id;})[0];}
@@ -349,7 +375,9 @@ function viewDeals(){
         +'<tr><td>Total product</td><td>8.5 tons (8 500 kg)</td></tr>'
         +'<tr><td>Packaging</td><td>Customised to your preferred bag-size combination</td></tr>'
       +'</tbody></table></div>'
-      +'<button class="btn btn-primary btn-block" style="margin-top:6px" data-act="enquire-deal">Request this package</button>'
+      +(canOrder()
+         ? '<button class="btn btn-primary btn-block" style="margin-top:6px" data-act="enquire-deal">Request this package</button>'
+         : '<div class="note" style="margin-top:6px">🔒 Log in as an <b>approved distributor</b> (View as ▸ Approved distributor) to request this package.</div>')
       +'<p class="psize" style="text-align:center;margin-top:8px">A Suthisa representative will confirm your packaging and current price. Price is subject to the prevailing market price of maize.</p>'
     +'</div>';
 }
@@ -375,7 +403,9 @@ function viewProduct(id){
     +'<div class="pprice" style="margin:14px 0 2px">'+zar(price)+' '+was+(wh?' <span class="tag-whole">WHOLESALE</span>':'')+'</div>'+saving
     +'<div style="margin:10px 0">'+stockMsg+'</div>'
     +'<label>Quantity</label><div class="qty"><button data-act="qty" data-id="'+id+'" data-d="-1">−</button><span>'+sel.qty+'</span><button data-act="qty" data-id="'+id+'" data-d="1">+</button></div>'
-    +'<div style="margin-top:18px"><button class="btn btn-primary btn-block" data-act="add" data-id="'+id+'"'+(v.stock<=0?' disabled':'')+'>Add to cart · '+zar(price*sel.qty)+'</button></div>'
+    +(canOrder()
+        ? '<div style="margin-top:18px"><button class="btn btn-primary btn-block" data-act="add" data-id="'+id+'"'+(v.stock<=0?' disabled':'')+'>Add to cart · '+zar(price*sel.qty)+'</button></div>'
+        : '<div class="note" style="margin-top:18px">🔒 Only <b>approved distributors</b> can order. Use <b>View as ▸ Approved distributor</b> to log in, or <button class="link" data-act="go" data-view="#/distributor">become a distributor</button>.</div>')
     +'<div class="note">🌽 Maize meal is a <b>zero-rated</b> staple in South Africa — <b>no 15% VAT</b> is charged on it.</div>'
     +'</div></div>';
 }
@@ -516,8 +546,8 @@ function adminProducts(){
     var rows=p.variants.map(function(v){
       return '<tr>'
         +'<td><input type="number" min="0" step="0.5" class="stock" data-act="editsize" data-vid="'+v.id+'" value="'+v.kg+'"> kg</td>'
-        +'<td>R <input type="number" min="0" step="0.01" data-act="editprice" data-vid="'+v.id+'" data-tier="retail" value="'+(v.retail/100).toFixed(2)+'"></td>'
         +'<td>R <input type="number" min="0" step="0.01" data-act="editprice" data-vid="'+v.id+'" data-tier="wholesale" value="'+(v.wholesale/100).toFixed(2)+'"></td>'
+        +'<td>R <input type="number" min="0" step="0.01" data-act="editprice" data-vid="'+v.id+'" data-tier="retail" value="'+(v.retail/100).toFixed(2)+'"></td>'
         +'<td><input type="number" min="0" class="stock" data-act="editstock" data-vid="'+v.id+'" value="'+v.stock+'"> '+(v.stock<=state.settings.lowStock?'<span class="pill '+(v.stock<=0?'red':'amber')+'">low</span>':'')+'</td>'
         +'<td><button class="link" data-act="delvariant" data-vid="'+v.id+'" style="color:var(--red)">Remove</button></td>'
         +'</tr>';
@@ -529,7 +559,7 @@ function adminProducts(){
         +'<div style="flex:1"></div>'
         +'<button class="btn btn-ghost btn-sm" data-act="delproduct" data-id="'+p.id+'" style="border-color:var(--red);color:var(--red)">Delete product</button>'
       +'</div>'
-      +'<div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Size (kg)</th><th>Retail</th><th>Wholesale</th><th>Stock</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+      +'<div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Size (kg)</th><th>Wholesale</th><th>Retail</th><th>Stock</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
       +'<button class="btn btn-yellow btn-sm" data-act="addsize" data-id="'+p.id+'" style="margin-top:10px">+ Add size</button>'
       +'</div>';
   }).join('');
@@ -542,12 +572,16 @@ function adminProducts(){
     +'<button class="btn btn-primary" style="margin-top:12px" data-act="addprod">Add product</button></form></details>';
 }
 function adminApprovals(){
+  function pill(s){return s==='pending'?'<span class="pill amber">Pending</span>':s==='approved'?'<span class="pill green">Approved</span>':s==='suspended'?'<span class="pill red">Suspended</span>':'<span class="pill red">Rejected</span>';}
   var rows=state.distributors.map(function(d){
-    var pill=d.status==='pending'?'<span class="pill amber">Pending</span>':(d.status==='approved'?'<span class="pill green">Approved</span>':'<span class="pill red">Rejected</span>');
-    var actions=d.status==='pending'?'<button class="btn btn-primary btn-sm" data-act="approve" data-id="'+d.id+'">Approve</button> <button class="btn btn-ghost btn-sm" data-act="reject" data-id="'+d.id+'">Reject</button>':'—';
-    return '<tr><td><b>'+esc(d.business)+'</b></td><td>'+esc(d.name)+'</td><td>'+esc(d.phone)+'<br><span class="psize">'+esc(d.email)+'</span></td><td>'+pill+'</td><td>'+actions+'</td></tr>';
+    var a;
+    if(d.status==='pending') a='<button class="btn btn-primary btn-sm" data-act="approve" data-id="'+d.id+'">Approve</button> <button class="btn btn-ghost btn-sm" data-act="reject" data-id="'+d.id+'">Reject</button>';
+    else if(d.status==='approved') a='<button class="btn btn-ghost btn-sm" data-act="suspend" data-id="'+d.id+'">Suspend</button>';
+    else if(d.status==='suspended') a='<button class="btn btn-primary btn-sm" data-act="approve" data-id="'+d.id+'">Re-activate</button> <button class="btn btn-ghost btn-sm" data-act="reject" data-id="'+d.id+'">Reject</button>';
+    else a='<button class="btn btn-primary btn-sm" data-act="approve" data-id="'+d.id+'">Approve</button>';
+    return '<tr><td><b>'+esc(d.business)+'</b></td><td>'+esc(d.name)+'</td><td>'+esc(d.phone)+'<br><span class="psize">'+esc(d.email)+'</span></td><td>'+pill(d.status)+'</td><td>'+a+'</td></tr>';
   }).join('');
-  return '<div class="h1">Distributor applications</div><p class="sub">Approve a business to grant it wholesale pricing.</p>'
+  return '<div class="h1">Distributors</div><p class="sub">Approve applications and manage who can order. Only <b>approved</b> distributors can place orders.</p>'
     +'<div class="tablewrap"><table><thead><tr><th>Business</th><th>Contact</th><th>Details</th><th>Status</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function adminOrders(){
@@ -584,20 +618,23 @@ document.addEventListener('click',function(e){
   var t=e.target.closest('[data-act]');if(!t)return;
   var act=t.getAttribute('data-act');
   if(act==='go'||act==='view'){go(t.getAttribute('data-view'));return;}
+  if(act==='login-submit'){doLogin();return;}
+  if(act==='login-cancel'){closeLogin();return;}
   if(act==='enquire-deal'){toast('Enquiry sent — Suthisa will confirm your packaging and current price');return;}
   if(act==='reset'){if(confirm('Reset all demo data to the original sample?')){LS.removeItem(KEY);LS.removeItem(KEY+'-cart');cart=[];load();go('#/shop');render();toast('Demo data reset');}return;}
-  if(act==='beadmin'){session.personaName='Admin';save();$('#persona').value='Admin';go('#/admin/dashboard');render();return;}
+  if(act==='beadmin'){if(authed['Admin']){session.personaName='Admin';save();$('#persona').value='Admin';go('#/admin/dashboard');render();}else openLogin('Admin');return;}
   var id=t.getAttribute('data-id'), vid=t.getAttribute('data-vid'), num=t.getAttribute('data-num');
 
   if(act==='size'){detailSel[id].vid=vid;detailSel[id].qty=1;render();return;}
   if(act==='qty'){var sl=detailSel[id];sl.qty=Math.max(1,sl.qty+parseInt(t.getAttribute('data-d'),10));render();return;}
-  if(act==='add'){var sl2=detailSel[id];addToCart(sl2.vid,sl2.qty);toast('Added to cart');go('#/cart');return;}
+  if(act==='add'){if(!canOrder()){toast('Only approved distributors can order');return;}var sl2=detailSel[id];addToCart(sl2.vid,sl2.qty);toast('Added to cart');go('#/cart');return;}
   if(act==='cqty'){changeCartQty(vid,parseInt(t.getAttribute('data-d'),10));render();return;}
   if(act==='cremove'){cart=cart.filter(function(l){return l.vid!==vid;});save();render();toast('Removed');return;}
   if(act==='placeorder'){placeOrder();return;}
 
   if(act==='approve'){setDist(id,'approved');toast('Distributor approved');return;}
   if(act==='reject'){setDist(id,'rejected');toast('Application rejected');return;}
+  if(act==='suspend'){setDist(id,'suspended');toast('Distributor suspended');return;}
   if(act==='verify'){setOrderStatus(num,'paid');toast('EFT payment verified · marked Paid');return;}
   if(act==='addprod'){e.preventDefault();addProduct();return;}
   if(act==='delproduct'){if(confirm('Delete this product and all its sizes?')){state.products=state.products.filter(function(x){return x.id!==id;});save();render();toast('Product removed');}return;}
@@ -608,7 +645,9 @@ document.addEventListener('click',function(e){
 });
 document.addEventListener('change',function(e){
   var t=e.target;
-  if(t.id==='persona'){session.personaName=t.value;save();var r=parse();if(persona().role==='admin')go('#/admin/dashboard');else if(r.view==='admin')go('#/shop');else render();return;}
+  if(t.id==='persona'){var chosen=t.value;
+    if(AUTH[chosen] && !authed[chosen]){t.value=session.personaName;openLogin(chosen);return;}
+    session.personaName=chosen;save();var r=parse();if(persona().role==='admin')go('#/admin/dashboard');else if(r.view==='admin')go('#/shop');else render();return;}
   var act=t.getAttribute&&t.getAttribute('data-act');if(!act)return;
   if(act==='setstatus'&&t.value){setOrderStatus(t.getAttribute('data-num'),t.value);toast('Status updated');return;}
   if(act==='editprice'){var fv=findVariant(t.getAttribute('data-vid'));if(fv){fv.v[t.getAttribute('data-tier')]=Math.round(parseFloat(t.value||0)*100);save();toast('Price updated');}return;}
@@ -632,6 +671,7 @@ function setOrderStatus(n,s){var o=orderByNum(n);if(o){o.status=s;save();render(
 function setDist(id,s){var d=state.distributors.filter(function(x){return x.id===id;})[0];if(d){d.status=s;save();render();}}
 
 function placeOrder(){
+  if(!canOrder()){toast('Only approved distributors can order');return;}
   var form=$('#checkoutForm');if(!form.reportValidity())return;
   var fd=new FormData(form);var f=checkoutState.fulfillment,pay=checkoutState.payment;
   var lines=cartLines();if(!lines.length)return;
