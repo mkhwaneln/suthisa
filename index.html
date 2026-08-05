@@ -204,18 +204,7 @@ var SEED={
     {id:'d1',business:'Ubuntu Spaza Group',name:'Bongani Khumalo',phone:'082 555 1122',email:'bongani@ubuntuspaza.co.za',status:'pending'},
     {id:'d2',business:'Green Valley Traders',name:'Aisha Patel',phone:'071 444 8899',email:'aisha@greenvalley.co.za',status:'pending'}
   ],
-  orders:[
-    {number:'ORD-1001',when:'2 days ago',customer:'Nomsa Dlamini',tier:'retail',fulfillment:'delivery',address:'22 Vilakazi St, Soweto',payment:'cash',status:'completed',proof:null,
-      items:[{name:'Super Maize Meal',kg:10,qty:2,unit:12499}],delivery:6500},
-    {number:'ORD-1002',when:'5 hours ago',customer:'Sipho Ndlovu',tier:'retail',fulfillment:'collection',depot:'Johannesburg Depot — 14 Mill Rd, Booysens',payment:'eft',status:'pending',proof:'proof-of-payment-1002.jpg',
-      items:[{name:'Super Maize Meal',kg:50,qty:1,unit:53999}],delivery:0},
-    {number:'ORD-1003',when:'1 day ago',customer:'Kagiso Wholesalers',tier:'wholesale',fulfillment:'delivery',address:'5 Industrial Ave, Germiston',payment:'eft',status:'preparing',proof:'eft-slip-1003.pdf',
-      items:[{name:'Special Maize Meal',kg:25,qty:6,unit:21900}],delivery:6500},
-    {number:'ORD-1004',when:'3 hours ago',customer:'Lerato Mokoena',tier:'retail',fulfillment:'delivery',address:'9 Church St, Pretoria',payment:'eft',status:'out_for_delivery',proof:'eft-slip-1004.pdf',
-      items:[{name:'Samp',kg:5,qty:3,unit:8999}],delivery:6500},
-    {number:'ORD-1005',when:'20 min ago',customer:'Themba Zulu',tier:'retail',fulfillment:'collection',depot:'Pretoria Depot — 88 Maize St, Silverton',payment:'cash',status:'ready',proof:null,
-      items:[{name:'Super Maize Meal',kg:5,qty:2,unit:6999}],delivery:0}
-  ]
+  orders:[]
 };
 
 var PERSONAS={
@@ -243,7 +232,7 @@ function nextStatuses(o){
 }
 
 /* ---------- state ---------- */
-var KEY='suthisa-demo-v1', state, session={personaName:'Guest'}, cart=[];
+var KEY='suthisa-demo-v2', state, session={personaName:'Guest'}, cart=[];
 function load(){
   try{var s=JSON.parse(LS.getItem(KEY));}catch(e){s=null;}
   state=s||JSON.parse(JSON.stringify(SEED));
@@ -308,7 +297,19 @@ function buildNav(){
 }
 
 /* ---------- SHOP ---------- */
+function comingSoonCustomer(){
+  return '<div class="empty" style="padding:56px 16px">'
+    +'<div class="big">🚧</div>'
+    +'<div class="h1">Customer ordering — coming soon</div>'
+    +'<p class="sub">This part of the site is still in progress.</p>'
+    +'<div class="card" style="max-width:460px;margin:14px auto;text-align:left">'
+    +'<p>We are launching for <b>approved distributors</b> first. Direct <b>customer (retail)</b> ordering is on the way — check back soon!</p>'
+    +'<p class="psize">In the meantime, businesses can register as a distributor to order at wholesale prices.</p>'
+    +'<button class="btn btn-primary btn-block" style="margin-top:8px" data-act="go" data-view="#/distributor">Become a distributor</button>'
+    +'</div></div>';
+}
 function viewShop(){
+  if(session.personaName==='Retail customer') return comingSoonCustomer();
   var wh=isWholesale();
   var banner=wh?'<div class="note">✅ You are viewing <b>wholesale (distributor) prices</b>. Retail shoppers see higher prices.</div>'
                  :'<div class="note">You are viewing <b>retail prices</b>. Approved distributors see lower wholesale prices — try the “Approved distributor” persona above.</div>';
@@ -511,23 +512,32 @@ function adminDashboard(){
     +'</div>';
 }
 function adminProducts(){
-  var rows=[];
-  state.products.forEach(function(p){
-    p.variants.forEach(function(v,idx){
-      rows.push('<tr>'
-        +(idx===0?'<td rowspan="'+p.variants.length+'"><b>'+esc(p.name)+'</b><br><span class="psize">'+esc(p.cat)+'</span></td>':'')
-        +'<td>'+v.kg+' kg</td>'
-        +'<td>R <input type="number" min="0" step="0.01" class="" data-act="editprice" data-vid="'+v.id+'" data-tier="retail" value="'+(v.retail/100).toFixed(2)+'"></td>'
+  var cards=state.products.map(function(p){
+    var rows=p.variants.map(function(v){
+      return '<tr>'
+        +'<td><input type="number" min="0" step="0.5" class="stock" data-act="editsize" data-vid="'+v.id+'" value="'+v.kg+'"> kg</td>'
+        +'<td>R <input type="number" min="0" step="0.01" data-act="editprice" data-vid="'+v.id+'" data-tier="retail" value="'+(v.retail/100).toFixed(2)+'"></td>'
         +'<td>R <input type="number" min="0" step="0.01" data-act="editprice" data-vid="'+v.id+'" data-tier="wholesale" value="'+(v.wholesale/100).toFixed(2)+'"></td>'
         +'<td><input type="number" min="0" class="stock" data-act="editstock" data-vid="'+v.id+'" value="'+v.stock+'"> '+(v.stock<=state.settings.lowStock?'<span class="pill '+(v.stock<=0?'red':'amber')+'">low</span>':'')+'</td>'
-        +'</tr>');
-    });
-  });
-  return '<div class="h1">Products &amp; stock</div><p class="sub">Edit retail/wholesale prices (Rands) and stock. Changes save automatically.</p>'
-    +'<div class="tablewrap"><table><thead><tr><th>Product</th><th>Size</th><th>Retail</th><th>Wholesale</th><th>Stock</th></tr></thead><tbody>'+rows.join('')+'</tbody></table></div>'
-    +'<details class="card" style="margin-top:14px"><summary style="font-weight:700;cursor:pointer">➕ Add a new product</summary>'
-    +'<form id="addProd"><div class="row2"><div><label>Product name</label><input type="text" name="name" required placeholder="e.g. Maize Rice"></div><div><label>Category</label><input type="text" name="cat" value="Staples"></div></div>'
-    +'<div class="row2"><div><label>Size (kg)</label><input type="number" name="kg" value="10" min="1"></div><div><label>Stock</label><input type="number" name="stock" value="50" min="0"></div></div>'
+        +'<td><button class="link" data-act="delvariant" data-vid="'+v.id+'" style="color:var(--red)">Remove</button></td>'
+        +'</tr>';
+    }).join('')||'<tr><td colspan="5" class="psize">No sizes yet — add one below.</td></tr>';
+    return '<div class="card" style="margin-bottom:14px">'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+        +'<input type="text" data-act="editname" data-id="'+p.id+'" value="'+esc(p.name)+'" style="font-weight:700;max-width:230px">'
+        +'<input type="text" data-act="editcat" data-id="'+p.id+'" value="'+esc(p.cat)+'" style="max-width:150px">'
+        +'<div style="flex:1"></div>'
+        +'<button class="btn btn-ghost btn-sm" data-act="delproduct" data-id="'+p.id+'" style="border-color:var(--red);color:var(--red)">Delete product</button>'
+      +'</div>'
+      +'<div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Size (kg)</th><th>Retail</th><th>Wholesale</th><th>Stock</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+      +'<button class="btn btn-yellow btn-sm" data-act="addsize" data-id="'+p.id+'" style="margin-top:10px">+ Add size</button>'
+      +'</div>';
+  }).join('');
+  return '<div class="h1">Products &amp; stock</div><p class="sub">Add or remove products, edit sizes, prices (Rands) and stock. Changes save automatically.</p>'
+    +cards
+    +'<details class="card"><summary style="font-weight:700;cursor:pointer">➕ Add a new product</summary>'
+    +'<form id="addProd"><div class="row2"><div><label>Product name</label><input type="text" name="name" required placeholder="e.g. Special Maize Meal"></div><div><label>Category</label><input type="text" name="cat" value="Maize Meal"></div></div>'
+    +'<div class="row2"><div><label>First size (kg)</label><input type="number" name="kg" value="10" min="0" step="0.5"></div><div><label>Stock</label><input type="number" name="stock" value="50" min="0"></div></div>'
     +'<div class="row2"><div><label>Retail price (R)</label><input type="number" name="retail" value="99.99" step="0.01"></div><div><label>Wholesale price (R)</label><input type="number" name="wholesale" value="85.00" step="0.01"></div></div>'
     +'<button class="btn btn-primary" style="margin-top:12px" data-act="addprod">Add product</button></form></details>';
 }
@@ -556,7 +566,7 @@ function adminOrders(){
       +'<td>'+verify+' '+setter+'</td></tr>';
   }).join('');
   return '<div class="h1">Orders</div><p class="sub">Verify EFT payments and move orders through fulfilment.</p>'
-    +'<div class="tablewrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Fulfil</th><th>Payment</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    +(state.orders.length?'<div class="tablewrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Fulfil</th><th>Payment</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="empty"><div class="big">📦</div><p>No orders yet. Orders placed by distributors will appear here.</p></div>');
 }
 function adminSettings(){
   var s=state.settings;
@@ -590,6 +600,9 @@ document.addEventListener('click',function(e){
   if(act==='reject'){setDist(id,'rejected');toast('Application rejected');return;}
   if(act==='verify'){setOrderStatus(num,'paid');toast('EFT payment verified · marked Paid');return;}
   if(act==='addprod'){e.preventDefault();addProduct();return;}
+  if(act==='delproduct'){if(confirm('Delete this product and all its sizes?')){state.products=state.products.filter(function(x){return x.id!==id;});save();render();toast('Product removed');}return;}
+  if(act==='delvariant'){for(var pi=0;pi<state.products.length;pi++){var vs=state.products[pi].variants,ix=-1;for(var k=0;k<vs.length;k++){if(vs[k].id===vid){ix=k;break;}}if(ix>=0){vs.splice(ix,1);break;}}save();render();toast('Size removed');return;}
+  if(act==='addsize'){var ap=findProduct(id);if(ap){ap.variants.push({id:'v'+Date.now()+Math.floor(Math.random()*1000),kg:10,retail:0,wholesale:0,stock:0});save();render();toast('Size added — set its details');}return;}
   if(act==='savesettings'){e.preventDefault();saveSettings();return;}
   if(act==='submitdist'){e.preventDefault();submitDistributor();return;}
 });
@@ -600,6 +613,9 @@ document.addEventListener('change',function(e){
   if(act==='setstatus'&&t.value){setOrderStatus(t.getAttribute('data-num'),t.value);toast('Status updated');return;}
   if(act==='editprice'){var fv=findVariant(t.getAttribute('data-vid'));if(fv){fv.v[t.getAttribute('data-tier')]=Math.round(parseFloat(t.value||0)*100);save();toast('Price updated');}return;}
   if(act==='editstock'){var fv2=findVariant(t.getAttribute('data-vid'));if(fv2){fv2.v.stock=parseInt(t.value||0,10);save();render();toast('Stock updated');}return;}
+  if(act==='editsize'){var fvs=findVariant(t.getAttribute('data-vid'));if(fvs){fvs.v.kg=parseFloat(t.value||0);save();toast('Size updated');}return;}
+  if(act==='editname'){var pn=findProduct(t.getAttribute('data-id'));if(pn){pn.name=t.value;save();toast('Name updated');}return;}
+  if(act==='editcat'){var pc=findProduct(t.getAttribute('data-id'));if(pc){pc.cat=t.value;save();toast('Category updated');}return;}
   if(act==='uploadproof'){var o=orderByNum(t.getAttribute('data-num'));if(o){o.proof=(t.files&&t.files[0]?t.files[0].name:'proof.jpg');save();render();toast('Proof uploaded');}return;}
 });
 // keep checkout radios reactive
