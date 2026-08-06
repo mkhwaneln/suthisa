@@ -190,7 +190,7 @@ var SEED={
   orderSeq:1006,
   settings:{
     bankName:'First National Bank (FNB)', accName:'Suthisa Foods (Pty) Ltd', accNo:'6284 1573 902', branch:'250655', accType:'Cheque / Current',
-    deliveryFee:6500, lowStock:10, vatRegistered:false, adminPassword:'admin123',
+    deliveryFee:6500, lowStock:10, vatRegistered:false, adminPassword:'admin123', adminName:'Admin',
     depots:['Johannesburg Depot — 14 Mill Rd, Booysens','Pretoria Depot — 88 Maize St, Silverton']
   },
   products:[
@@ -241,6 +241,7 @@ function load(){
   if(AUTH[session.personaName] && !authed[session.personaName]) session.personaName='Guest';  // protected personas must log in each session
   if(!state.dealRequests) state.dealRequests=[];  // safety for older cached state
   if(!state.settings.adminPassword) state.settings.adminPassword='admin123';  // changeable admin password (persists)
+  if(!state.settings.adminName) state.settings.adminName='Admin';  // admin login name (full name)
 }
 function save(){try{LS.setItem(KEY,JSON.stringify(state));LS.setItem(KEY+'-cart',JSON.stringify(cart));LS.setItem(KEY+'-persona',session.personaName);}catch(e){}}
 function persona(){return PERSONAS[session.personaName]||PERSONAS.Guest;}
@@ -252,15 +253,17 @@ var AUTH={'Admin':'admin123','Approved distributor':'kagiso123'};  // protected 
 function authPassword(name){return name==='Admin'?(state.settings.adminPassword||'admin123'):AUTH[name];}
 var authed={}, pendingPersona=null;                                // authed resets on reload (in-memory only)
 function canOrder(){return session.personaName==='Approved distributor';}  // only a logged-in approved distributor may order
-function openLogin(name){pendingPersona=name;$('#loginTitle').textContent='Log in as '+name;var em=$('#loginEmail'),pw=$('#loginPw');pw.value='';
-  if(name==='Approved distributor'){em.style.display='';em.value='';$('#loginHint').textContent='Demo — enter your distributor email + password (demo password: '+AUTH[name]+')';}
-  else{em.style.display='none';var ap=authPassword(name);$('#loginHint').textContent=(name==='Admin'&&ap!=='admin123')?'Enter your admin password.':'Demo password: '+ap;}
-  $('#loginModal').classList.add('show');setTimeout(function(){try{(name==='Approved distributor'?em:pw).focus();}catch(e){}},40);}
+function openLogin(name){pendingPersona=name;$('#loginTitle').textContent='Log in as '+name;var em=$('#loginEmail'),pw=$('#loginPw');pw.value='';em.value='';$('#loginHint').textContent='';
+  if(name==='Approved distributor'){em.style.display='';em.placeholder='Login email';}
+  else if(name==='Admin'){em.style.display='';em.placeholder='Login name';}
+  else{em.style.display='none';}
+  $('#loginModal').classList.add('show');setTimeout(function(){try{em.focus();}catch(e){}},40);}
 function closeLogin(){$('#loginModal').classList.remove('show');pendingPersona=null;}
 function doLogin(){var pw=$('#loginPw').value;
   if(!(pendingPersona&&pw===authPassword(pendingPersona))){toast('Incorrect password');return;}
   var target=pendingPersona, label=target;
   if(target==='Approved distributor'){var email=($('#loginEmail').value||'').trim();if(!email){toast('Please enter your distributor email');return;}var d=state.distributors.filter(function(x){return (x.email||'').toLowerCase()===email.toLowerCase()&&x.status==='approved';})[0];session.distEmail=email;session.distName=d?d.business:email;label=session.distName;}
+  else if(target==='Admin'){var an=($('#loginEmail').value||'').trim();if(!an){toast('Please enter your admin login name');return;}if(an.toLowerCase()!==(state.settings.adminName||'Admin').toLowerCase()){toast('Incorrect login name');return;}label=state.settings.adminName||'Admin';}
   authed[target]=true;pendingPersona=null;$('#loginModal').classList.remove('show');session.personaName=target;save();
   if(persona().role==='admin')go('#/admin/dashboard');else go('#/shop');render();toast('Logged in as '+label);}
 document.addEventListener('keydown',function(e){if(e.key==='Enter'&&$('#loginModal')&&$('#loginModal').classList.contains('show'))doLogin();});
@@ -341,7 +344,7 @@ function viewShop(){
     : '<div class="note">Viewing <b>wholesale (distributor) prices</b>. <button class="link" data-act="go" data-view="#/distributor">Become a distributor</button> or log in via <b>View as ▸ Approved distributor</b> to order.</div>';
   var cards=state.products.map(function(p){
     var v=p.variants[0];var price=priceOf(v);
-    var was=wh?'<span class="was">'+zar(v.retail)+'</span>':'';
+    var was='';  // struck-through retail price deferred (to be implemented later)
     return '<div class="product" data-act="go" data-view="#/product/'+p.id+'" style="cursor:pointer">'
       +'<div class="pimg">'+p.emoji+'</div><div class="pbody">'
       +'<div class="pcat">'+esc(p.cat)+'</div><div class="pname">'+esc(p.name)+'</div>'
@@ -394,8 +397,8 @@ function viewProduct(id){
     return '<button data-act="size" data-id="'+id+'" data-vid="'+x.id+'" class="'+(x.id===sel.vid?'active':'')+'"'+(out?' disabled':'')+'>'+x.kg+' kg'+(out?' (out)':'')+'</button>';
   }).join('');
   var stockMsg=v.stock<=0?'<span class="pill red">Out of stock</span>':(v.stock<=state.settings.lowStock?'<span class="pill amber">Low stock — '+v.stock+' left</span>':'<span class="pill green">In stock</span>');
-  var was=wh?'<span class="was">'+zar(v.retail)+'</span>':'';
-  var saving=wh?'<div style="color:var(--green);font-weight:700;font-size:14px">You save '+zar(v.retail-v.wholesale)+' (wholesale)</div>':'';
+  var was='';  // struck-through retail price deferred (to be implemented later)
+  var saving='';  // "You save (wholesale)" note deferred (to be implemented later)
   return '<button class="crumb" data-act="go" data-view="#/shop">‹ Back to shop</button>'
     +'<div class="detail"><div class="pimg">'+p.emoji+'</div><div>'
     +'<div class="pcat">'+esc(p.cat)+'</div><div class="h1" style="margin-top:0">'+esc(p.name)+'</div>'
@@ -632,6 +635,7 @@ function adminSettings(){
     +'<div class="row2"><div><label>Account name</label><input type="text" name="accName" value="'+esc(s.accName)+'"></div><div><label>Account number</label><input type="text" name="accNo" value="'+esc(s.accNo)+'"></div></div>'
     +'<div class="row2"><div><label>Branch code</label><input type="text" name="branch" value="'+esc(s.branch)+'"></div><div><label>Delivery fee (R)</label><input type="number" name="deliveryFee" step="0.01" value="'+(s.deliveryFee/100).toFixed(2)+'"></div></div>'
     +'<label>Low-stock alert threshold (units)</label><input type="number" name="lowStock" value="'+s.lowStock+'">'
+    +'<label>Admin login name (your full name)</label><input type="text" name="adminName" value="'+esc(s.adminName||'Admin')+'">'
     +'<button class="btn btn-primary" style="margin-top:14px" data-act="savesettings">Save settings</button></form>'
     +'<form id="pwForm" class="card" style="max-width:560px;margin-top:14px"><b>Change admin password</b>'
     +'<div class="row2"><div><label>New password</label><input type="password" name="newpw" required></div><div><label>Confirm new password</label><input type="password" name="newpw2" required></div></div>'
@@ -726,7 +730,7 @@ function addProduct(){
 function saveSettings(){
   var form=$('#setForm');var fd=new FormData(form);var s=state.settings;
   s.bankName=fd.get('bankName');s.accName=fd.get('accName');s.accNo=fd.get('accNo');s.branch=fd.get('branch');
-  s.deliveryFee=Math.round(parseFloat(fd.get('deliveryFee'))*100);s.lowStock=parseInt(fd.get('lowStock'),10)||0;
+  s.deliveryFee=Math.round(parseFloat(fd.get('deliveryFee'))*100);s.lowStock=parseInt(fd.get('lowStock'),10)||0;s.adminName=(fd.get('adminName')||'').trim()||s.adminName;
   save();render();toast('Settings saved');
 }
 function submitDistributor(){
