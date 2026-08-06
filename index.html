@@ -208,7 +208,7 @@ var SEED={
 };
 
 var PERSONAS={
-  'Guest':{role:'shop',wholesale:false,name:'Guest'},
+  'Guest':{role:'shop',wholesale:true,name:'Guest'},
   'Retail customer':{role:'shop',wholesale:false,name:'Nomsa Dlamini'},
   'Approved distributor':{role:'shop',wholesale:true,name:'Kagiso Wholesalers'},
   'Admin':{role:'admin',wholesale:false,name:'Admin'}
@@ -336,8 +336,9 @@ function comingSoonCustomer(){
 function viewShop(){
   if(session.personaName==='Retail customer') return comingSoonCustomer();
   var wh=isWholesale();
-  var banner=wh?'<div class="note">✅ Signed in as <b>'+esc(session.distName||'distributor')+'</b> — viewing <b>wholesale prices</b>. Retail buyers see higher prices.</div>'
-                 :'<div class="note">You are viewing <b>retail prices</b>. Approved distributors see lower wholesale prices — try the “Approved distributor” persona above.</div>';
+  var banner=(session.personaName==='Approved distributor')
+    ? '<div class="note">✅ Signed in as <b>'+esc(session.distName||'distributor')+'</b> — viewing <b>wholesale prices</b>.</div>'
+    : '<div class="note">Viewing <b>wholesale (distributor) prices</b>. <button class="link" data-act="go" data-view="#/distributor">Become a distributor</button> or log in via <b>View as ▸ Approved distributor</b> to order.</div>';
   var cards=state.products.map(function(p){
     var v=p.variants[0];var price=priceOf(v);
     var was=wh?'<span class="was">'+zar(v.retail)+'</span>':'';
