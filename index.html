@@ -190,7 +190,7 @@ var SEED={
   orderSeq:1006,
   settings:{
     bankName:'First National Bank (FNB)', accName:'Suthisa Foods (Pty) Ltd', accNo:'6284 1573 902', branch:'250655', accType:'Cheque / Current',
-    deliveryFee:6500, lowStock:10, vatRegistered:false, adminPassword:'admin123', adminName:'Admin',
+    deliveryFee:6500, lowStock:10, vatRegistered:false, adminPassword:'admin123', adminName:'Admin', stockPassword:'stock123', stockName:'Stock',
     depots:['Johannesburg Depot — 14 Mill Rd, Booysens','Pretoria Depot — 88 Maize St, Silverton']
   },
   products:[
@@ -211,7 +211,8 @@ var PERSONAS={
   'Guest':{role:'shop',wholesale:true,name:'Guest'},
   'Retail customer':{role:'shop',wholesale:false,name:'Nomsa Dlamini'},
   'Approved distributor':{role:'shop',wholesale:true,name:'Kagiso Wholesalers'},
-  'Admin':{role:'admin',wholesale:false,name:'Admin'}
+  'Admin':{role:'admin',wholesale:false,name:'Admin'},
+  'Stock admin':{role:'admin',wholesale:false,name:'Stock admin',stockOnly:true}
 };
 
 var STATUS={
@@ -242,6 +243,8 @@ function load(){
   if(!state.dealRequests) state.dealRequests=[];  // safety for older cached state
   if(!state.settings.adminPassword) state.settings.adminPassword='admin123';  // changeable admin password (persists)
   if(!state.settings.adminName) state.settings.adminName='Admin';  // admin login name (full name)
+  if(!state.settings.stockPassword) state.settings.stockPassword='stock123';  // stock-admin password
+  if(!state.settings.stockName) state.settings.stockName='Stock';  // stock-admin login name
 }
 function save(){try{LS.setItem(KEY,JSON.stringify(state));LS.setItem(KEY+'-cart',JSON.stringify(cart));LS.setItem(KEY+'-persona',session.personaName);}catch(e){}}
 function persona(){return PERSONAS[session.personaName]||PERSONAS.Guest;}
@@ -249,13 +252,15 @@ function isWholesale(){return persona().wholesale;}
 function priceOf(v){return isWholesale()?v.wholesale:v.retail;}
 
 /* ---------- auth & ordering permissions ---------- */
-var AUTH={'Admin':'admin123','Approved distributor':'kagiso123'};  // protected personas (defaults; admin pw is overridable in Settings)
-function authPassword(name){return name==='Admin'?(state.settings.adminPassword||'admin123'):AUTH[name];}
+var AUTH={'Admin':'admin123','Stock admin':'stock123','Approved distributor':'kagiso123'};  // protected personas (defaults; admin/stock pw overridable in Settings)
+function authPassword(name){return name==='Admin'?(state.settings.adminPassword||'admin123'):name==='Stock admin'?(state.settings.stockPassword||'stock123'):AUTH[name];}
+function loginNameFor(name){return name==='Admin'?(state.settings.adminName||'Admin'):name==='Stock admin'?(state.settings.stockName||'Stock'):null;}
+function isStockOnly(){return !!persona().stockOnly;}  // stock-taker admin (can edit stock only)
 var authed={}, pendingPersona=null;                                // authed resets on reload (in-memory only)
 function canOrder(){return session.personaName==='Approved distributor';}  // only a logged-in approved distributor may order
 function openLogin(name){pendingPersona=name;$('#loginTitle').textContent='Log in as '+name;var em=$('#loginEmail'),pw=$('#loginPw');pw.value='';em.value='';$('#loginHint').textContent='';
   if(name==='Approved distributor'){em.style.display='';em.placeholder='Login email';}
-  else if(name==='Admin'){em.style.display='';em.placeholder='Login name';}
+  else if(name==='Admin'||name==='Stock admin'){em.style.display='';em.placeholder='Login name';}
   else{em.style.display='none';}
   $('#loginModal').classList.add('show');setTimeout(function(){try{em.focus();}catch(e){}},40);}
 function closeLogin(){$('#loginModal').classList.remove('show');pendingPersona=null;}
@@ -263,9 +268,9 @@ function doLogin(){var pw=$('#loginPw').value;
   if(!(pendingPersona&&pw===authPassword(pendingPersona))){toast('Incorrect password');return;}
   var target=pendingPersona, label=target;
   if(target==='Approved distributor'){var email=($('#loginEmail').value||'').trim();if(!email){toast('Please enter your distributor email');return;}var d=state.distributors.filter(function(x){return (x.email||'').toLowerCase()===email.toLowerCase()&&x.status==='approved';})[0];session.distEmail=email;session.distName=d?d.business:email;label=session.distName;}
-  else if(target==='Admin'){var an=($('#loginEmail').value||'').trim();if(!an){toast('Please enter your admin login name');return;}if(an.toLowerCase()!==(state.settings.adminName||'Admin').toLowerCase()){toast('Incorrect login name');return;}label=state.settings.adminName||'Admin';}
+  else if(target==='Admin'||target==='Stock admin'){var an=($('#loginEmail').value||'').trim();if(!an){toast('Please enter your login name');return;}if(an.toLowerCase()!==(loginNameFor(target)||'').toLowerCase()){toast('Incorrect login name');return;}label=loginNameFor(target);}
   authed[target]=true;pendingPersona=null;$('#loginModal').classList.remove('show');session.personaName=target;save();
-  if(persona().role==='admin')go('#/admin/dashboard');else go('#/shop');render();toast('Logged in as '+label);}
+  if(persona().role==='admin')go(isStockOnly()?'#/admin/products':'#/admin/dashboard');else go('#/shop');render();toast('Logged in as '+label);}
 document.addEventListener('keydown',function(e){if(e.key==='Enter'&&$('#loginModal')&&$('#loginModal').classList.contains('show'))doLogin();});
 
 /* ---------- lookups ---------- */
@@ -312,7 +317,7 @@ function syncHeader(){
 }
 function buildNav(){
   var admin=persona().role==='admin', r=parse(), items;
-  if(admin){items=[['#/admin/dashboard','Dashboard','dashboard'],['#/admin/products','Products & stock','products'],['#/admin/orders','Orders','orders'],['#/admin/approvals','Distributors','approvals'],['#/admin/requests','Requests','requests'],['#/admin/settings','Settings','settings']];}
+  if(admin){items=persona().stockOnly?[['#/admin/products','Products & stock','products']]:[['#/admin/dashboard','Dashboard','dashboard'],['#/admin/products','Products & stock','products'],['#/admin/orders','Orders','orders'],['#/admin/approvals','Distributors','approvals'],['#/admin/requests','Requests','requests'],['#/admin/settings','Settings','settings']];}
   else{var pn=session.personaName;items=[['#/shop','Shop','shop']];
     if(pn!=='Retail customer') items.push(['#/deals','Package deals','deals']);            // deals hidden for customers
     if(pn==='Approved distributor') items.push(['#/cart','Cart','cart']);                   // cart only for approved distributors
@@ -514,6 +519,7 @@ function viewDistributor(){
 function guardAdmin(){return '<div class="empty"><div class="big">🔒</div><p>The admin console requires the <b>Admin</b> persona.</p><button class="btn btn-primary" data-act="beadmin">Switch to Admin</button></div>';}
 
 function viewAdmin(sub){
+  if(isStockOnly())return adminProducts();  // stock-taker admin: stock page only
   if(sub==='products')return adminProducts();
   if(sub==='orders')return adminOrders();
   if(sub==='approvals')return adminApprovals();
@@ -552,36 +558,37 @@ function adminDashboard(){
 function adminProducts(){
   var totalVal=0;state.products.forEach(function(p){p.variants.forEach(function(v){totalVal+=v.wholesale*v.stock;});});
   var onlyOne=state.products.length<=1;  // can't delete the last product
+  var so=isStockOnly();  // stock-taker admin: stock only (no price/structural edits)
   var cards=state.products.map(function(p){
     var rows=p.variants.map(function(v){
       return '<tr>'
         +'<td><input type="number" min="10" max="80" step="0.5" class="stock" data-act="editsize" data-vid="'+v.id+'" value="'+v.kg+'"> kg</td>'
-        +'<td>R <input type="number" min="0" step="0.01" data-act="editprice" data-vid="'+v.id+'" data-tier="wholesale" value="'+(v.wholesale/100).toFixed(2)+'"></td>'
-        +'<td>R <input type="number" min="0" step="0.01" data-act="editprice" data-vid="'+v.id+'" data-tier="retail" value="'+(v.retail/100).toFixed(2)+'"></td>'
+        +'<td>R <input type="number" min="0" step="0.01"'+(so?' disabled':'')+' data-act="editprice" data-vid="'+v.id+'" data-tier="wholesale" value="'+(v.wholesale/100).toFixed(2)+'"></td>'
+        +'<td>R <input type="number" min="0" step="0.01"'+(so?' disabled':'')+' data-act="editprice" data-vid="'+v.id+'" data-tier="retail" value="'+(v.retail/100).toFixed(2)+'"></td>'
         +'<td><input type="number" min="0" class="stock" data-act="editstock" data-vid="'+v.id+'" value="'+v.stock+'"> '+(v.stock<=state.settings.lowStock?'<span class="pill '+(v.stock<=0?'red':'amber')+'">low</span>':'')+'</td>'
         +'<td><b>'+zar(v.wholesale*v.stock)+'</b></td>'
-        +'<td><button class="link" data-act="delvariant" data-vid="'+v.id+'" style="color:var(--red)">Remove</button></td>'
+        +'<td>'+(so?'':'<button class="link" data-act="delvariant" data-vid="'+v.id+'" style="color:var(--red)">Remove</button>')+'</td>'
         +'</tr>';
     }).join('')||'<tr><td colspan="6" class="psize">No sizes yet — add one below.</td></tr>';
     return '<div class="card" style="margin-bottom:14px">'
       +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
-        +'<input type="text" data-act="editname" data-id="'+p.id+'" value="'+esc(p.name)+'" style="font-weight:700;max-width:230px">'
-        +'<input type="text" data-act="editcat" data-id="'+p.id+'" value="'+esc(p.cat)+'" style="max-width:150px">'
+        +'<input type="text" data-act="editname" data-id="'+p.id+'" value="'+esc(p.name)+'"'+(so?' disabled':'')+' style="font-weight:700;max-width:230px">'
+        +'<input type="text" data-act="editcat" data-id="'+p.id+'" value="'+esc(p.cat)+'"'+(so?' disabled':'')+' style="max-width:150px">'
         +'<div style="flex:1"></div>'
-        +'<button class="btn btn-ghost btn-sm" data-act="delproduct" data-id="'+p.id+'"'+(onlyOne?' disabled title="At least one product is required"':'')+' style="border-color:var(--red);color:var(--red)">Delete product</button>'
+        +(so?'':'<button class="btn btn-ghost btn-sm" data-act="delproduct" data-id="'+p.id+'"'+(onlyOne?' disabled title="At least one product is required"':'')+' style="border-color:var(--red);color:var(--red)">Delete product</button>')
       +'</div>'
       +'<div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Size (kg)</th><th>Wholesale</th><th>Retail</th><th>Stock</th><th>Value (wholesale)</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
-      +'<button class="btn btn-yellow btn-sm" data-act="addsize" data-id="'+p.id+'" style="margin-top:10px">+ Add size</button>'
+      +(so?'':'<button class="btn btn-yellow btn-sm" data-act="addsize" data-id="'+p.id+'" style="margin-top:10px">+ Add size</button>')
       +'</div>';
   }).join('');
-  return '<div class="h1">Products &amp; stock</div><p class="sub">Add or remove products, edit sizes, prices (Rands) and stock. Changes save automatically.</p>'
+  return '<div class="h1">Products &amp; stock</div><p class="sub">'+(so?'Stock-taking — update <b>stock</b> quantities only. Prices and products are locked for this login.':'Add or remove products, edit sizes, prices (Rands) and stock. Changes save automatically.')+'</p>'
     +cards
     +'<div class="card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><b>Total stock value (wholesale)</b><span class="pprice">'+zar(totalVal)+'</span></div>'
-    +'<details class="card"><summary style="font-weight:700;cursor:pointer">➕ Add a new product</summary>'
+    +(so?'':'<details class="card"><summary style="font-weight:700;cursor:pointer">➕ Add a new product</summary>'
     +'<form id="addProd"><div class="row2"><div><label>Product name</label><input type="text" name="name" required placeholder="e.g. Special Maize Meal"></div><div><label>Category</label><input type="text" name="cat" value="Maize Meal"></div></div>'
     +'<div class="row2"><div><label>First size (kg)</label><input type="number" name="kg" value="10" min="10" max="80" step="0.5"></div><div><label>Stock</label><input type="number" name="stock" value="50" min="0"></div></div>'
     +'<div class="row2"><div><label>Retail price (R)</label><input type="number" name="retail" value="99.99" step="0.01"></div><div><label>Wholesale price (R)</label><input type="number" name="wholesale" value="85.00" step="0.01"></div></div>'
-    +'<button class="btn btn-primary" style="margin-top:12px" data-act="addprod">Add product</button></form></details>';
+    +'<button class="btn btn-primary" style="margin-top:12px" data-act="addprod">Add product</button></form></details>');
 }
 function adminApprovals(){
   function pill(s){return s==='pending'?'<span class="pill amber">Pending</span>':s==='approved'?'<span class="pill green">Approved</span>':s==='suspended'?'<span class="pill red">Suspended</span>':'<span class="pill red">Rejected</span>';}
@@ -636,6 +643,8 @@ function adminSettings(){
     +'<div class="row2"><div><label>Branch code</label><input type="text" name="branch" value="'+esc(s.branch)+'"></div><div><label>Delivery fee (R)</label><input type="number" name="deliveryFee" step="0.01" value="'+(s.deliveryFee/100).toFixed(2)+'"></div></div>'
     +'<label>Low-stock alert threshold (units)</label><input type="number" name="lowStock" value="'+s.lowStock+'">'
     +'<label>Admin login name (your full name)</label><input type="text" name="adminName" value="'+esc(s.adminName||'Admin')+'">'
+    +'<hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><b>Stock-taker admin (stock only)</b>'
+    +'<div class="row2"><div><label>Stock-admin login name</label><input type="text" name="stockName" value="'+esc(s.stockName||'Stock')+'"></div><div><label>Stock-admin password</label><input type="text" name="stockPassword" value="'+esc(s.stockPassword||'stock123')+'"></div></div>'
     +'<button class="btn btn-primary" style="margin-top:14px" data-act="savesettings">Save settings</button></form>'
     +'<form id="pwForm" class="card" style="max-width:560px;margin-top:14px"><b>Change admin password</b>'
     +'<div class="row2"><div><label>New password</label><input type="password" name="newpw" required></div><div><label>Confirm new password</label><input type="password" name="newpw2" required></div></div>'
@@ -650,6 +659,7 @@ document.addEventListener('click',function(e){
   if(act==='go'||act==='view'){go(t.getAttribute('data-view'));return;}
   if(act==='login-submit'){doLogin();return;}
   if(act==='login-cancel'){closeLogin();return;}
+  if(isStockOnly()&&act!=='editstock'){toast('Stock-taker admin can update stock only');return;}  // block price/structural/other actions
   if(act==='reqdeal'){state.dealRequests.push({id:'req'+Date.now()+Math.floor(Math.random()*1000),business:persona().name,pkg:'8.5 Ton Maize Meal Package Deal',price:'R 60 000',when:'just now',status:'pending'});save();toast('Request sent to Suthisa for approval');return;}
   if(act==='reset'){if(confirm('Reset all demo data to the original sample?')){LS.removeItem(KEY);LS.removeItem(KEY+'-cart');cart=[];load();go('#/shop');render();toast('Demo data reset');}return;}
   if(act==='beadmin'){if(authed['Admin']){session.personaName='Admin';save();$('#persona').value='Admin';go('#/admin/dashboard');render();}else openLogin('Admin');return;}
@@ -683,6 +693,7 @@ document.addEventListener('change',function(e){
     if(AUTH[chosen] && !authed[chosen]){t.value=session.personaName;openLogin(chosen);return;}
     session.personaName=chosen;save();var r=parse();if(persona().role==='admin')go('#/admin/dashboard');else if(r.view==='admin')go('#/shop');else render();return;}
   var act=t.getAttribute&&t.getAttribute('data-act');if(!act)return;
+  if(isStockOnly()&&act!=='editstock')return;  // stock-taker admin: only stock quantity edits
   if(act==='setstatus'&&t.value){setOrderStatus(t.getAttribute('data-num'),t.value);toast('Status updated');return;}
   if(act==='editprice'){var fv=findVariant(t.getAttribute('data-vid'));if(fv){fv.v[t.getAttribute('data-tier')]=Math.round(parseFloat(t.value||0)*100);save();render();toast('Price updated');}return;}
   if(act==='editstock'){var fv2=findVariant(t.getAttribute('data-vid'));if(fv2){fv2.v.stock=parseInt(t.value||0,10);save();render();toast('Stock updated');}return;}
@@ -730,7 +741,7 @@ function addProduct(){
 function saveSettings(){
   var form=$('#setForm');var fd=new FormData(form);var s=state.settings;
   s.bankName=fd.get('bankName');s.accName=fd.get('accName');s.accNo=fd.get('accNo');s.branch=fd.get('branch');
-  s.deliveryFee=Math.round(parseFloat(fd.get('deliveryFee'))*100);s.lowStock=parseInt(fd.get('lowStock'),10)||0;s.adminName=(fd.get('adminName')||'').trim()||s.adminName;
+  s.deliveryFee=Math.round(parseFloat(fd.get('deliveryFee'))*100);s.lowStock=parseInt(fd.get('lowStock'),10)||0;s.adminName=(fd.get('adminName')||'').trim()||s.adminName;s.stockName=(fd.get('stockName')||'').trim()||s.stockName;s.stockPassword=(fd.get('stockPassword')||'').trim()||s.stockPassword;
   save();render();toast('Settings saved');
 }
 function submitDistributor(){
