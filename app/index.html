@@ -45,6 +45,20 @@ tbody tr:nth-child(even){background:#f7faf8}
 .pwwrap{position:relative}.pwwrap input{padding-right:44px}
 .pwtoggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;font-size:18px;line-height:1;cursor:pointer;padding:4px;opacity:.7}
 .pwtoggle:hover{opacity:1}
+.grid{display:grid;gap:14px}
+.products{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.product{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.pname{font-weight:700}
+.pcat{font-size:12px;color:var(--muted)}
+.pprice{font-size:18px;font-weight:800;color:var(--green-dark)}
+.psize{font-size:12px;color:var(--muted)}
+.radio{display:flex;gap:10px;align-items:flex-start;border:1.5px solid var(--line);border-radius:12px;padding:12px;margin:8px 0;cursor:pointer}
+.radio.sel{border-color:var(--green);background:var(--green-soft)}
+.radio input{margin-top:3px}
+.radio .t{font-weight:700}
+.radio .d{font-size:13px;color:var(--muted)}
+.sumrow{display:flex;justify-content:space-between;padding:6px 0;font-size:15px}
+.sumrow.total{font-size:19px;font-weight:800;color:var(--green-dark);border-top:2px solid var(--line);margin-top:6px;padding-top:10px}
 </style>
 </head>
 <body>
@@ -87,6 +101,39 @@ if(SUPABASE_URL.indexOf('PASTE_')===0 || SUPABASE_ANON_KEY.indexOf('PASTE_')===0
 
 var sb=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 var me={user:null, role:null, name:null, stockOnly:false};
+var cart=[]; // [{variant_id, product_id, product_name, size_kg, unit_price_cents, qty}]
+var distributorApproved=null;
+function cartKey(){ return 'suthisa-app-cart-'+(me.user?me.user.id:'anon'); }
+function loadCart(){ try{ cart=JSON.parse(localStorage.getItem(cartKey()))||[]; }catch(e){ cart=[]; } }
+function saveCart(){ try{ localStorage.setItem(cartKey(), JSON.stringify(cart)); }catch(e){} }
+function cartCount(){ return cart.reduce(function(a,l){return a+l.qty;},0); }
+function cartSubtotal(){ return cart.reduce(function(a,l){return a+l.unit_price_cents*l.qty;},0); }
+
+/* ---------- router ---------- */
+function go(hash){ location.hash=hash; }
+function parseHash(){ var h=(location.hash||'#/shop').replace(/^#\//,'').split('/'); return {view:h[0]||'shop', id:h[1]||''}; }
+function renderRoute(){
+  if(!me.user){ return; }
+  var r=parseHash();
+  if(me.role==='admin' && !me.stockOnly){
+    // full admin
+    if(r.view==='admin' && r.id==='orders'){ return viewAdminOrders(); }
+    if(r.view==='distributors'){ return loadDistributors(); }
+    return loadCatalogue(); // default admin view (Products & stock)
+  }
+  if(me.stockOnly){ return loadStock(); }
+  // distributor
+  if(distributorApproved===false){ return shell('<div class="msg">Your distributor account is <b>pending approval</b>. You will be able to order once an admin approves it.</div>','shop'); }
+  switch(r.view){
+    case 'product':  return viewProduct(r.id);
+    case 'cart':     return viewCart();
+    case 'checkout': return viewCheckout();
+    case 'confirm':  return viewConfirm(r.id);
+    case 'orders':   return viewMyOrders();
+    default:         return viewShop();
+  }
+}
+window.addEventListener('hashchange', renderRoute);
 
 /* ---------- boot ---------- */
 sb.auth.getSession().then(function(res){
@@ -126,25 +173,37 @@ function onSignedIn(user){
     me.role=(r.data && r.data.role) || 'unknown';
     me.name=(r.data && r.data.full_name) || user.email;
     me.stockOnly=!!(r.data && r.data.stock_only);   // DB-enforced stock-taker admin
-    if(me.stockOnly) loadStock(); else loadCatalogue();
+    loadCart();
+    if(me.role==='distributor'){
+      sb.from('distributors').select('status').eq('profile_id', user.id).maybeSingle().then(function(d){
+        distributorApproved = !!(d.data && d.data.status==='approved');
+        if(!location.hash) location.hash='#/shop';
+        renderRoute();
+      });
+    } else { if(!location.hash && !me.stockOnly) location.hash='#/'; renderRoute(); }
   });
 }
 function shell(inner, view){
-  var fullAdmin = me.role==='admin' && !me.stockOnly;
-  var nav = fullAdmin
-    ? '<div class="nav"><button class="tab'+(view==='distributors'?'':' active')+'" data-view="catalogue">Products &amp; stock</button>'
-      +'<button class="tab'+(view==='distributors'?' active':'')+'" data-view="distributors">Distributors</button></div>'
-    : '';
+  var nav='';
+  if(me.role==='admin' && !me.stockOnly){
+    nav='<div class="nav">'
+      +'<button class="tab'+(view==='catalogue'?' active':'')+'" data-nav="#/">Products &amp; stock</button>'
+      +'<button class="tab'+(view==='distributors'?' active':'')+'" data-nav="#/distributors">Distributors</button>'
+      +'<button class="tab'+(view==='adminorders'?' active':'')+'" data-nav="#/admin/orders">Orders</button></div>';
+  } else if(me.role==='distributor' && distributorApproved){
+    nav='<div class="nav">'
+      +'<button class="tab'+(view==='shop'?' active':'')+'" data-nav="#/shop">Shop</button>'
+      +'<button class="tab'+(view==='cart'?' active':'')+'" data-nav="#/cart">Cart ('+cartCount()+')</button>'
+      +'<button class="tab'+(view==='orders'?' active':'')+'" data-nav="#/orders">My orders</button></div>';
+  }
   var roleLabel = me.stockOnly ? 'stock' : me.role;
   root.innerHTML='<header class="top"><div class="brand">SUTHISA<small>Maize Meal</small></div><div class="spacer"></div>'
     +'<div class="whoami">'+esc(me.user.email)+' <span class="role">'+esc(roleLabel)+'</span></div>'
     +'<button class="btn btn-ghost btn-sm" id="out">Sign out</button></header>'+nav+'<main id="main">'+inner+'</main>';
   var o=document.getElementById('out'); if(o) o.addEventListener('click', function(){ sb.auth.signOut(); });
-  if(fullAdmin){
-    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){
-      b.addEventListener('click', function(){ b.getAttribute('data-view')==='distributors' ? loadDistributors() : loadCatalogue(); });
-    });
-  }
+  Array.prototype.forEach.call(document.querySelectorAll('.tab[data-nav]'), function(b){
+    b.addEventListener('click', function(){ go(b.getAttribute('data-nav')); });
+  });
 }
 
 function loadCatalogue(){
@@ -212,6 +271,228 @@ function loadStock(){
           m.innerHTML = rr.error ? '<div class="msg err">Save failed: '+esc(rr.error.message)+'</div>' : '<div class="msg ok">Saved ✓</div>';
           setTimeout(function(){ if(m) m.innerHTML=''; }, 2000);
         });
+      });
+    });
+}
+
+/* ---------- shop + product (distributor) ---------- */
+var catalogueCache=null, detailSel={};
+function loadCatalogueData(cb){
+  if(catalogueCache){ return cb(catalogueCache); }
+  sb.from('products').select('id,name,category,description,product_variants(id,size_kg,wholesale_price_cents,stock_qty,low_stock_threshold)')
+    .eq('is_active',true).order('name').then(function(r){
+      if(r.error){ cb(null, r.error); return; }
+      (r.data||[]).forEach(function(p){ (p.product_variants||[]).sort(function(a,b){return a.size_kg-b.size_kg;}); });
+      catalogueCache=r.data||[]; cb(catalogueCache);
+    });
+}
+function viewShop(){
+  shell('<div class="h1">Order maize meal</div><p class="sub">Fresh from the mill · delivered or collected · pay by cash or EFT</p><div id="shop" class="muted">Loading…</div>','shop');
+  loadCatalogueData(function(products, err){
+    var box=document.getElementById('shop');
+    if(err){ box.innerHTML='<div class="msg err">Could not load products: '+esc(err.message)+'</div>'; return; }
+    if(!products.length){ box.innerHTML='<div class="msg">No products yet.</div>'; return; }
+    box.innerHTML='<div class="grid products">'+products.map(function(p){
+      var v=p.product_variants[0]||{size_kg:0,wholesale_price_cents:0};
+      return '<div class="card product" data-open="'+p.id+'" style="cursor:pointer">'
+        +'<div class="pcat">'+esc(p.category||'')+'</div><div class="pname">'+esc(p.name)+'</div>'
+        +'<div class="psize">from '+v.size_kg+' kg</div>'
+        +'<div class="pprice">'+zar(v.wholesale_price_cents)+' <span class="muted">/ '+v.size_kg+'kg</span></div>'
+        +'<button class="btn btn-sm btn-block" data-open="'+p.id+'" style="margin-top:8px">View sizes</button></div>';
+    }).join('')+'</div>';
+    box.addEventListener('click', function(ev){ var el=ev.target.closest('[data-open]'); if(el){ go('#/product/'+el.getAttribute('data-open')); } });
+  });
+}
+function viewProduct(id){
+  loadCatalogueData(function(products, err){
+    var p=(products||[]).filter(function(x){return x.id===id;})[0];
+    if(!p){ shell('<div class="msg err">Product not found.</div>','shop'); return; }
+    var sel=detailSel[id]||(detailSel[id]={variantId:p.product_variants[0].id, qty:1});
+    var v=p.product_variants.filter(function(x){return x.id===sel.variantId;})[0]||p.product_variants[0];
+    var thr=(v.low_stock_threshold==null?10:v.low_stock_threshold);
+    var badge=v.stock_qty<=0?'<span class="pill red">Out of stock</span>':(v.stock_qty<=thr?'<span class="pill amber">Low — '+v.stock_qty+' left</span>':'<span class="pill">In stock</span>');
+    var sizes=p.product_variants.map(function(x){ var out=x.stock_qty<=0; return '<button class="tab'+(x.id===sel.variantId?' active':'')+'" data-size="'+x.id+'"'+(out?' disabled':'')+'>'+x.size_kg+' kg'+(out?' (out)':'')+'</button>'; }).join('');
+    shell('<button class="btn btn-ghost btn-sm" data-nav="#/shop">‹ Back to shop</button>'
+      +'<div class="h1" style="margin-top:8px">'+esc(p.name)+'</div><p class="sub">'+esc(p.description||'')+'</p>'
+      +'<label>Size (KG)</label><div class="nav">'+sizes+'</div>'
+      +'<div class="pprice" style="margin:12px 0">'+zar(v.wholesale_price_cents)+' <span class="role">WHOLESALE</span></div>'
+      +'<div style="margin:8px 0">'+badge+'</div>'
+      +'<label>Quantity</label><div class="nav"><button class="btn btn-ghost btn-sm" data-q="-1">−</button><span id="qv" style="padding:8px 12px;font-weight:700">'+sel.qty+'</span><button class="btn btn-ghost btn-sm" data-q="1">+</button></div>'
+      +'<button class="btn btn-block" id="add" style="margin-top:16px"'+(v.stock_qty<=0?' disabled':'')+'>Add to cart · '+zar(v.wholesale_price_cents*sel.qty)+'</button>'
+      +'<div class="msg" style="margin-top:12px">🌽 Maize meal is <b>zero-rated</b> — no 15% VAT.</div>','shop');
+    document.getElementById('main').addEventListener('click', function(ev){
+      var s=ev.target.closest('[data-size]'); if(s){ sel.variantId=s.getAttribute('data-size'); sel.qty=1; viewProduct(id); return; }
+      var b=ev.target.closest('[data-nav]'); if(b){ go(b.getAttribute('data-nav')); return; }
+      var q=ev.target.closest('[data-q]'); if(q){ sel.qty=Math.max(1, sel.qty+parseInt(q.getAttribute('data-q'),10)); viewProduct(id); return; }
+      if(ev.target.id==='add'){ addToCart(v, p, sel.qty); go('#/cart'); }
+    });
+  });
+}
+function addToCart(v, p, qty){
+  var line=cart.filter(function(l){return l.variant_id===v.id;})[0];
+  if(line){ line.qty+=qty; } else { cart.push({variant_id:v.id, product_id:p.id, product_name:p.name, size_kg:v.size_kg, unit_price_cents:v.wholesale_price_cents, qty:qty}); }
+  saveCart();
+}
+
+/* ---------- cart (distributor) ---------- */
+function setCartQty(vid, d){ var l=cart.filter(function(x){return x.variant_id===vid;})[0]; if(!l)return; l.qty=Math.max(1,l.qty+d); saveCart(); viewCart(); }
+function removeCartLine(vid){ cart=cart.filter(function(x){return x.variant_id!==vid;}); saveCart(); viewCart(); }
+function viewCart(){
+  if(!cart.length){ shell('<div class="h1">Your cart</div><div class="msg">Your cart is empty. <button class="btn btn-sm" data-nav="#/shop">Browse products</button></div>','cart'); wireNav(); return; }
+  var rows=cart.map(function(l){ return '<tr><td><b>'+esc(l.product_name)+'</b><br><span class="muted">'+l.size_kg+' kg · wholesale</span></td>'
+    +'<td>'+zar(l.unit_price_cents)+'</td>'
+    +'<td><button class="btn btn-ghost btn-sm" data-cq="-1" data-vid="'+l.variant_id+'">−</button> '+l.qty+' <button class="btn btn-ghost btn-sm" data-cq="1" data-vid="'+l.variant_id+'">+</button></td>'
+    +'<td><b>'+zar(l.unit_price_cents*l.qty)+'</b></td>'
+    +'<td><button class="btn btn-ghost btn-sm" data-rm="'+l.variant_id+'">Remove</button></td></tr>'; }).join('');
+  shell('<div class="h1">Your cart</div>'
+    +'<div class="tablewrap"><table><thead><tr><th>Item</th><th>Unit</th><th>Qty</th><th>Line</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+    +'<div class="card" style="max-width:340px;margin-left:auto;margin-top:12px">'
+    +'<div class="sumrow"><span>Subtotal</span><b>'+zar(cartSubtotal())+'</b></div>'
+    +'<div class="sumrow"><span>VAT (zero-rated)</span><b>'+zar(0)+'</b></div>'
+    +'<button class="btn btn-block" data-nav="#/checkout" style="margin-top:8px">Checkout</button>'
+    +'<p class="muted" style="text-align:center">+ delivery fee if delivered</p></div>','cart');
+  var m=document.getElementById('main');
+  m.addEventListener('click', function(ev){
+    var q=ev.target.closest('[data-cq]'); if(q){ setCartQty(q.getAttribute('data-vid'), parseInt(q.getAttribute('data-cq'),10)); return; }
+    var rm=ev.target.closest('[data-rm]'); if(rm){ removeCartLine(rm.getAttribute('data-rm')); return; }
+    var n=ev.target.closest('[data-nav]'); if(n){ go(n.getAttribute('data-nav')); }
+  });
+}
+function wireNav(){ Array.prototype.forEach.call(document.querySelectorAll('#main [data-nav]'), function(b){ b.addEventListener('click', function(){ go(b.getAttribute('data-nav')); }); }); }
+
+/* ---------- checkout + place order (distributor) ---------- */
+var myDistributor=null, settingsCache=null, depotsCache=null, checkoutState={fulfillment:'delivery',payment:'cash'};
+function loadCheckoutRefs(cb){
+  var done=0, need=3;
+  function tick(){ done++; if(done>=need) cb(); }
+  if(myDistributor){ tick(); } else sb.from('distributors').select('id,name,surname,phone,address1,address2,city,province').eq('profile_id',me.user.id).maybeSingle().then(function(r){ myDistributor=r.data||{}; tick(); });
+  if(settingsCache){ tick(); } else sb.from('business_settings').select('bank_name,account_name,account_number,branch_code,default_delivery_fee_cents').maybeSingle().then(function(r){ settingsCache=r.data||{}; tick(); });
+  if(depotsCache){ tick(); } else sb.from('depots').select('id,name,address').eq('is_active',true).order('name').then(function(r){ depotsCache=r.data||[]; tick(); });
+}
+function viewCheckout(){
+  if(!cart.length){ go('#/cart'); return; }
+  loadCheckoutRefs(function(){
+    var f=checkoutState.fulfillment, pay=checkoutState.payment;
+    var deliv=f==='delivery'?(settingsCache.default_delivery_fee_cents||0):0;
+    var total=cartSubtotal()+deliv;
+    var addr=[myDistributor.address1,myDistributor.address2,myDistributor.city,myDistributor.province].filter(Boolean).join(', ');
+    var name=((myDistributor.name||'')+' '+(myDistributor.surname||'')).trim();
+    var depotOpts=(depotsCache||[]).map(function(d){return '<option value="'+d.id+'">'+esc(d.name)+'</option>';}).join('')||'<option value="">(no depots configured)</option>';
+    var s=settingsCache, hasBank=!!(s.bank_name);
+    shell('<button class="btn btn-ghost btn-sm" data-nav="#/cart">‹ Back to cart</button><div class="h1" style="margin-top:8px">Checkout</div>'
+      +'<form id="co"><div class="card"><b>Your details</b>'
+        +'<label>Name</label><input name="name" value="'+esc(name)+'">'
+        +'<label>Phone</label><input name="phone" value="'+esc(myDistributor.phone||'')+'">'
+      +'</div>'
+      +'<div class="card" style="margin-top:12px"><b>How would you like to receive it?</b>'
+        +'<label class="radio"><input type="radio" name="ff" value="delivery"'+(f==='delivery'?' checked':'')+'> 🚚 Delivery · '+zar(settingsCache.default_delivery_fee_cents||0)+'</label>'
+        +'<label class="radio"><input type="radio" name="ff" value="collection"'+(f==='collection'?' checked':'')+'> 🏬 Collection · free</label>'
+        +(f==='delivery'?'<label>Delivery address</label><textarea name="address">'+esc(addr)+'</textarea>':'<label>Collect from</label><select name="depot">'+depotOpts+'</select>')
+      +'</div>'
+      +'<div class="card" style="margin-top:12px"><b>Payment</b>'
+        +'<label class="radio"><input type="radio" name="pay" value="cash"'+(pay==='cash'?' checked':'')+'> 💵 Cash on '+(f==='collection'?'collection':'delivery')+'</label>'
+        +'<label class="radio"><input type="radio" name="pay" value="eft"'+(pay==='eft'?' checked':'')+'> 🏦 Manual EFT (upload proof after)</label>'
+        +(pay==='eft'?(hasBank?'<div class="msg"><b>'+esc(s.bank_name)+'</b> · Acc '+esc(s.account_name||'')+' '+esc(s.account_number||'')+' · Branch '+esc(s.branch_code||'')+' · Reference: your order number</div>':'<div class="msg amber">Bank details not yet configured — you can still order; we\'ll send details.</div>'):'')
+      +'</div></form>'
+      +'<div class="card" style="margin-top:12px"><b>Summary</b>'
+        +cart.map(function(l){return '<div class="sumrow"><span>'+esc(l.product_name)+' '+l.size_kg+'kg × '+l.qty+'</span><b>'+zar(l.unit_price_cents*l.qty)+'</b></div>';}).join('')
+        +'<div class="sumrow"><span>Delivery</span><b>'+zar(deliv)+'</b></div>'
+        +'<div class="sumrow"><span>VAT (zero-rated)</span><b>'+zar(0)+'</b></div>'
+        +'<div class="sumrow"><span><b>Total</b></span><b>'+zar(total)+'</b></div>'
+        +'<button class="btn btn-block" id="place" style="margin-top:10px">Place order</button></div>','checkout');
+    var m=document.getElementById('main');
+    m.addEventListener('change', function(ev){ var t=ev.target;
+      if(t.name==='ff'){ checkoutState.fulfillment=t.value; viewCheckout(); }
+      if(t.name==='pay'){ checkoutState.payment=t.value; viewCheckout(); } });
+    m.addEventListener('click', function(ev){ var n=ev.target.closest('[data-nav]'); if(n){ go(n.getAttribute('data-nav')); return; } if(ev.target.id==='place'){ placeOrder(); } });
+  });
+}
+function placeOrder(){
+  var btn=document.getElementById('place'); btn.disabled=true; btn.textContent='Placing…';
+  var form=document.getElementById('co');
+  var items=cart.map(function(l){ return {variant_id:l.variant_id, qty:l.qty}; });
+  var f=checkoutState.fulfillment;
+  var address=f==='delivery'?(form.address?form.address.value:''):null;
+  var depot=f==='collection'?(form.depot?form.depot.value:null):null;
+  if(f==='delivery' && !address){ btn.disabled=false; btn.textContent='Place order'; alert('Please enter a delivery address'); return; }
+  sb.rpc('place_order', { p_items:items, p_fulfillment:f, p_delivery_address:address, p_depot_id:depot||null, p_payment_method:checkoutState.payment, p_notes:null })
+    .then(function(r){
+      if(r.error){ btn.disabled=false; btn.textContent='Place order'; alert('Could not place order: '+r.error.message); return; }
+      var row=Array.isArray(r.data)?r.data[0]:r.data;
+      cart=[]; saveCart(); catalogueCache=null; // stock changed
+      go('#/confirm/'+row.order_id);
+    });
+}
+
+/* ---------- confirmation + EFT proof upload (distributor) ---------- */
+function viewConfirm(orderId){
+  shell('<div id="cf" class="muted">Loading…</div>','');
+  sb.from('orders').select('id,order_number,status,payment_method,payment_status,fulfillment_type,delivery_address,depot_id,delivery_fee_cents,total_cents,order_items(product_name,size_kg,unit_price_cents,qty),payments(id,proof_url)').eq('id',orderId).maybeSingle()
+    .then(function(r){
+      var box=document.getElementById('cf');
+      if(r.error||!r.data){ box.innerHTML='<div class="msg err">Order not found.</div>'; return; }
+      var o=r.data, eftPending=(o.payment_method==='eft' && o.payment_status==='unpaid');
+      var hasProof=(o.payments||[]).some(function(p){return p.proof_url;});
+      box.innerHTML='<div class="card" style="max-width:560px;margin:0 auto">'
+        +'<div class="h1">Order '+esc(o.order_number)+'</div><p class="sub">Status: <span class="pill">'+esc(o.status)+'</span> · Payment: <span class="pill">'+esc(o.payment_status)+'</span></p>'
+        +(o.payment_method==='cash'?'<div class="msg">💵 Please have <b>'+zar(o.total_cents)+'</b> ready to pay on '+(o.fulfillment_type==='collection'?'collection':'delivery')+'.</div>':'')
+        +(eftPending?'<div class="msg">🏦 Pay <b>'+zar(o.total_cents)+'</b> by EFT using reference <b>'+esc(o.order_number)+'</b>, then upload your proof.'+(hasProof?'<br>✅ Proof uploaded — awaiting verification.':'<br><label>Upload proof of payment</label><input type="file" id="proof" accept="image/*,application/pdf"><button class="btn btn-sm" id="up" style="margin-top:6px">Upload</button>')+'</div>':'')
+        +'<div class="card">'+(o.order_items||[]).map(function(i){return '<div class="sumrow"><span>'+esc(i.product_name)+' '+i.size_kg+'kg × '+i.qty+'</span><b>'+zar(i.unit_price_cents*i.qty)+'</b></div>';}).join('')
+          +'<div class="sumrow"><span>Delivery</span><b>'+zar(o.delivery_fee_cents)+'</b></div><div class="sumrow"><span><b>Total</b></span><b>'+zar(o.total_cents)+'</b></div></div>'
+        +'<button class="btn btn-block" data-nav="#/shop" style="margin-top:12px">Continue shopping</button></div>';
+      var up=document.getElementById('up'); if(up){ up.addEventListener('click', function(){ var f=document.getElementById('proof').files[0]; if(!f){ alert('Choose a file'); return; } uploadProof(o.id, o.total_cents, o.order_number, f, up); }); }
+      var cont=box.querySelector('[data-nav]'); if(cont){ cont.addEventListener('click', function(){ go('#/shop'); }); }
+    });
+}
+function uploadProof(orderId, total, orderNumber, file, btn){
+  btn.disabled=true; btn.textContent='Uploading…';
+  var path=orderId+'/'+Date.now()+'-'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+  sb.storage.from('pop-uploads').upload(path, file).then(function(u){
+    if(u.error){ btn.disabled=false; btn.textContent='Upload'; alert('Upload failed: '+u.error.message); return; }
+    sb.from('payments').insert({ order_id:orderId, method:'eft', amount_cents:total, status:'pending', proof_url:path, reference:orderNumber }).then(function(p){
+      if(p.error){ btn.disabled=false; btn.textContent='Upload'; alert('Saved file but could not record payment: '+p.error.message); return; }
+      viewConfirm(orderId);
+    });
+  });
+}
+
+/* ---------- my orders (distributor) + admin orders ---------- */
+function viewMyOrders(){
+  shell('<div class="h1">My orders</div><div id="mo" class="muted">Loading…</div>','orders');
+  sb.from('orders').select('id,order_number,status,payment_method,payment_status,total_cents,placed_at').order('placed_at',{ascending:false})
+    .then(function(r){
+      var box=document.getElementById('mo');
+      if(r.error){ box.innerHTML='<div class="msg err">'+esc(r.error.message)+'</div>'; return; }
+      var os=r.data||[]; if(!os.length){ box.innerHTML='<div class="msg">No orders yet.</div>'; return; }
+      box.innerHTML='<div class="tablewrap"><table><thead><tr><th>Order</th><th>Date</th><th>Total</th><th>Payment</th><th>Status</th></tr></thead><tbody>'
+        +os.map(function(o){return '<tr data-open="'+o.id+'" style="cursor:pointer"><td>'+esc(o.order_number)+'</td><td>'+esc((o.placed_at||'').slice(0,10))+'</td><td>'+zar(o.total_cents)+'</td><td>'+esc(o.payment_method)+' · '+esc(o.payment_status)+'</td><td><span class="pill">'+esc(o.status)+'</span></td></tr>';}).join('')
+        +'</tbody></table></div>';
+      box.addEventListener('click', function(ev){ var t=ev.target.closest('[data-open]'); if(t){ go('#/confirm/'+t.getAttribute('data-open')); } });
+    });
+}
+var ORDER_STATUSES=['pending','confirmed','preparing','ready','out_for_delivery','completed','cancelled','refunded'];
+function viewAdminOrders(){
+  shell('<div class="h1">Orders</div><div id="ao" class="muted">Loading…</div>','adminorders');
+  sb.from('orders').select('id,order_number,status,payment_method,payment_status,total_cents,placed_at,distributors(name,surname),payments(id,proof_url,status)').order('placed_at',{ascending:false})
+    .then(function(r){
+      var box=document.getElementById('ao');
+      if(r.error){ box.innerHTML='<div class="msg err">'+esc(r.error.message)+'</div>'; return; }
+      var os=r.data||[];
+      box.innerHTML='<div class="tablewrap"><table><thead><tr><th>Order</th><th>Distributor</th><th>Total</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody>'
+        +os.map(function(o){
+          var d=o.distributors?((o.distributors.name||'')+' '+(o.distributors.surname||'')).trim():'';
+          var pay=(o.payments||[])[0];
+          var opts=ORDER_STATUSES.map(function(s){return '<option'+(s===o.status?' selected':'')+'>'+s+'</option>';}).join('');
+          var verify=(o.payment_method==='eft' && pay && pay.proof_url && o.payment_status!=='paid')?'<button class="btn btn-sm btn-ghost" data-viewproof="'+esc(pay.proof_url)+'">View proof</button> <button class="btn btn-sm" data-verify="1" data-oid="'+o.id+'" data-pid="'+pay.id+'">Mark paid</button>':'';
+          return '<tr><td>'+esc(o.order_number)+'</td><td>'+esc(d)+'</td><td>'+zar(o.total_cents)+'</td><td>'+esc(o.payment_method)+' · '+esc(o.payment_status)+'</td>'
+            +'<td><select data-status data-oid="'+o.id+'">'+opts+'</select></td><td>'+verify+'</td></tr>';
+        }).join('')+'</tbody></table></div><div id="aomsg"></div>';
+      box.addEventListener('change', function(ev){ var s=ev.target; if(s.hasAttribute&&s.hasAttribute('data-status')){ sb.from('orders').update({status:s.value}).eq('id',s.getAttribute('data-oid')).then(function(rr){ document.getElementById('aomsg').innerHTML=rr.error?'<div class="msg err">'+esc(rr.error.message)+'</div>':'<div class="msg ok">Status updated ✓</div>'; }); } });
+      box.addEventListener('click', function(ev){
+        var vp=ev.target.closest && ev.target.closest('[data-viewproof]');
+        if(vp){ sb.storage.from('pop-uploads').createSignedUrl(vp.getAttribute('data-viewproof'),120).then(function(u){ if(u.data&&u.data.signedUrl){ window.open(u.data.signedUrl,'_blank'); } else { alert('Could not open proof'+(u.error?': '+u.error.message:'')); } }); return; }
+        var vb=ev.target.closest && ev.target.closest('[data-verify]');
+        if(vb){ if(!confirm('Mark this EFT payment as verified / paid?')) return; var pid=vb.getAttribute('data-pid'), oid=vb.getAttribute('data-oid'); sb.from('payments').update({status:'verified', verified_by:me.user.id, verified_at:new Date().toISOString()}).eq('id',pid).then(function(rr){ if(rr.error){ alert('Verify failed: '+rr.error.message); return; } sb.from('orders').update({payment_status:'paid'}).eq('id',oid).then(function(){ viewAdminOrders(); }); }); return; }
       });
     });
 }
