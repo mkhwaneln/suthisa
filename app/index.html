@@ -133,6 +133,7 @@ function renderRoute(){
     case 'checkout': return viewCheckout();
     case 'confirm':  return viewConfirm(r.id);
     case 'orders':   return viewMyOrders();
+    case 'deals':    return viewDeals();
     default:         return viewShop();
   }
 }
@@ -291,21 +292,52 @@ function loadCatalogueData(cb){
       catalogueCache=r.data||[]; cb(catalogueCache);
     });
 }
+function dealBanner(){
+  return '<div class="card" data-open-deal="1" style="cursor:pointer;border:2px solid var(--yellow);background:#fffde7;display:flex;align-items:center;gap:12px;margin-bottom:14px">'
+    +'<div style="font-size:32px">🚛</div>'
+    +'<div style="flex:1"><b>8.5 Ton Package Deal — R 60 000</b><div class="muted">Bulk Maize Meal, packed your way (10–80 kg bags). Tap to view.</div></div>'
+    +'<span class="btn btn-sm" style="background:var(--yellow);color:var(--green-dark)">View deal</span></div>';
+}
+function viewDeals(){
+  shell('<button class="btn btn-ghost btn-sm" data-nav="#/shop">‹ Back to shop</button>'
+    +'<div class="h1" style="margin-top:8px">8.5 Ton Package Deal</div><p class="sub">Save on volume — packed to suit your business</p>'
+    +'<div class="card" style="border:2px solid var(--yellow)">'
+      +'<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="font-size:42px">🚛</div>'
+        +'<div><div class="pcat">Maize Meal</div><div style="font-size:20px;font-weight:800;color:var(--green-dark)">8.5 Ton Package Deal</div></div>'
+        +'<div style="flex:1"></div><div style="text-align:right"><div class="pprice">R 60 000</div><div class="muted">8 500 kg total</div></div></div>'
+      +'<hr style="border:none;border-top:1px solid var(--line);margin:14px 0">'
+      +'<p>Order <b>8.5 tons (8 500 kg)</b> of Maize Meal, packed <b>your way</b> — any combination of <b>10, 12.5, 25, 50 and 80 kg</b> bags.</p>'
+      +'<div class="msg"><b>Example combination</b><br>• 2 000 kg in 10 kg bags<br>• 2 500 kg in 25 kg bags<br>• 4 000 kg in 50 kg bags<br><span class="muted">…or any mix totalling 8 500 kg.</span></div>'
+      +'<div class="tablewrap"><table style="min-width:0"><tbody>'
+        +'<tr><td>Package</td><td><b>8.5 Ton Maize Meal Package Deal</b></td></tr>'
+        +'<tr><td>Price</td><td><b>R 60 000</b></td></tr>'
+        +'<tr><td>Total product</td><td>8.5 tons (8 500 kg)</td></tr>'
+        +'<tr><td>Packaging</td><td>Customised to your preferred bag-size combination</td></tr>'
+      +'</tbody></table></div>'
+      +'<p class="muted" style="text-align:center;margin-top:10px">A Suthisa representative will confirm your packaging and current price. Price is subject to the prevailing market price of maize.</p>'
+    +'</div>', 'shop');
+  wireNav();
+}
 function viewShop(){
   shell('<div class="h1">Order maize meal</div><p class="sub">Fresh from the mill · delivered or collected · pay by cash or EFT</p><div id="shop" class="muted">Loading…</div>','shop');
   loadCatalogueData(function(products, err){
     var box=document.getElementById('shop');
     if(err){ box.innerHTML='<div class="msg err">Could not load products: '+esc(err.message)+'</div>'; return; }
-    if(!products.length){ box.innerHTML='<div class="msg">No products yet.</div>'; return; }
-    box.innerHTML='<div class="grid products">'+products.map(function(p){
-      var v=p.product_variants[0]||{size_kg:0,wholesale_price_cents:0};
-      return '<div class="card product" data-open="'+p.id+'" style="cursor:pointer">'
-        +'<div class="pcat">'+esc(p.category||'')+'</div><div class="pname">'+esc(p.name)+'</div>'
-        +'<div class="psize">from '+v.size_kg+' kg</div>'
-        +'<div class="pprice">'+zar(v.wholesale_price_cents)+' <span class="muted">/ '+v.size_kg+'kg</span></div>'
-        +'<button class="btn btn-sm btn-block" data-open="'+p.id+'" style="margin-top:8px">View sizes</button></div>';
-    }).join('')+'</div>';
-    box.addEventListener('click', function(ev){ var el=ev.target.closest('[data-open]'); if(el){ go('#/product/'+el.getAttribute('data-open')); } });
+    var grid = products.length
+      ? '<div class="grid products">'+products.map(function(p){
+          var v=p.product_variants[0]||{size_kg:0,wholesale_price_cents:0};
+          return '<div class="card product" data-open="'+p.id+'" style="cursor:pointer">'
+            +'<div class="pcat">'+esc(p.category||'')+'</div><div class="pname">'+esc(p.name)+'</div>'
+            +'<div class="psize">from '+v.size_kg+' kg</div>'
+            +'<div class="pprice">'+zar(v.wholesale_price_cents)+' <span class="muted">/ '+v.size_kg+'kg</span></div>'
+            +'<button class="btn btn-sm btn-block" data-open="'+p.id+'" style="margin-top:8px">View sizes</button></div>';
+        }).join('')+'</div>'
+      : '<div class="msg">No products yet.</div>';
+    box.innerHTML=dealBanner()+grid;
+    box.addEventListener('click', function(ev){
+      var d=ev.target.closest && ev.target.closest('[data-open-deal]'); if(d){ go('#/deals'); return; }
+      var el=ev.target.closest('[data-open]'); if(el){ go('#/product/'+el.getAttribute('data-open')); }
+    });
   });
 }
 function viewProduct(id){
