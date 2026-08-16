@@ -63,17 +63,12 @@ tbody tr:nth-child(even){background:#f7faf8}
 </style>
 </head>
 <body>
-<div class="flag">🔌 <b>Live app</b> — connected to Supabase (login + catalogue + distributors). Not the offline demo.</div>
 <div id="root"><main><div class="card loginwrap">Loading…</div></main></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* =====================================================================
-   CONFIG — paste your Supabase project values here.
-   Find them in Supabase: Project Settings → API
-     • Project URL              → SUPABASE_URL
-     • Project API keys → anon  → SUPABASE_ANON_KEY   (safe for the browser)
-   Do NOT paste the service_role key here.
+   CONFIG — backend API values (already set below).
    ===================================================================== */
 var SUPABASE_URL = 'https://jhtlvlyjcolotfnzykpf.supabase.co';
 var SUPABASE_ANON_KEY = 'sb_publishable_hkq0tpLDFwTmpK-50e-vug_LyIZVU04';
@@ -93,10 +88,10 @@ document.addEventListener('click', function(ev){
 });
 
 /* config guard */
-if(!window.supabase){root.innerHTML='<main><div class="card loginwrap"><div class="msg err">Could not load the Supabase library. Check your internet connection and reload.</div></div></main>';return;}
+if(!window.supabase){root.innerHTML='<main><div class="card loginwrap"><div class="msg err">Could not load a required library. Check your internet connection and reload.</div></div></main>';return;}
 if(SUPABASE_URL.indexOf('PASTE_')===0 || SUPABASE_ANON_KEY.indexOf('PASTE_')===0){
-  root.innerHTML='<main><div class="card loginwrap"><div class="h1">Almost there</div><p class="sub">Add your Supabase keys to switch this on.</p>'
-    +'<p class="muted">Open <b>app/index.html</b>, and near the top of the script set <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> from your Supabase dashboard (Project Settings → API). Then reload.</p></div></main>';
+  root.innerHTML='<main><div class="card loginwrap"><div class="h1">Almost there</div><p class="sub">Add your API keys to switch this on.</p>'
+    +'<p class="muted">Open <b>app/index.html</b> and set the API URL and key near the top of the script, then reload.</p></div></main>';
   return;
 }
 
@@ -583,7 +578,7 @@ function viewAdminOrders(){
 
 /* ---------- business settings (admin) ---------- */
 function viewAdminSettings(){
-  shell('<div class="h1">Business settings</div><p class="sub">Bank details (shown to distributors paying by EFT) and the delivery fee. Saved to your Supabase database.</p><div id="bset" class="muted">Loading…</div>', 'adminsettings');
+  shell('<div class="h1">Business settings</div><p class="sub">Bank details (shown to distributors paying by EFT) and the delivery fee. Changes save automatically.</p><div id="bset" class="muted">Loading…</div>', 'adminsettings');
   sb.from('business_settings').select('*').maybeSingle().then(function(r){
     var box=document.getElementById('bset');
     if(r.error){ box.innerHTML='<div class="msg err">Could not load settings: '+esc(r.error.message)+'</div>'; return; }
@@ -688,7 +683,7 @@ function distActions(d){
   return '<button class="btn btn-sm" data-act="approve" data-id="'+d.id+'">Approve</button>';
 }
 function loadDistributors(){
-  shell('<div class="h1">Distributors</div><p class="sub">Live from your Supabase database'+(me.role==='admin'?' — approve, suspend or reject accounts.':'.')+'</p><div id="dist" class="muted">Loading distributors…</div>', 'distributors');
+  shell('<div class="h1">Distributors</div><p class="sub">Distributor accounts'+(me.role==='admin'?' — approve, suspend or reject.':'.')+'</p><div id="dist" class="muted">Loading distributors…</div>', 'distributors');
   sb.from('distributors').select('id,name,surname,login_name,phone,alternatephone,city,province,status').order('name')
     .then(function(r){
       var box=document.getElementById('dist');
