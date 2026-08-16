@@ -103,15 +103,17 @@ function renderLogin(msg){
     +'<div class="brand" style="color:var(--green-dark);font-size:20px;margin-bottom:2px">SUTHISA</div>'
     +'<div class="h1">Sign in</div><p class="sub">Log in to manage the catalogue.</p>'
     +(msg?'<div class="msg err">'+esc(msg)+'</div>':'')
-    +'<form id="lf"><label>Email</label><input type="email" id="em" required autocomplete="username">'
+    +'<form id="lf"><label>Login name or email</label><input type="text" id="em" required autocomplete="username" placeholder="e.g. noma.mkhwane">'
     +'<label>Password</label><div class="pwwrap"><input type="password" id="pw" required autocomplete="current-password"><button type="button" class="pwtoggle" data-target="pw" aria-label="Show password">👁</button></div>'
     +'<button class="btn btn-block" style="margin-top:16px" id="sb">Sign in</button></form>'
-    +'<p class="muted" style="margin-top:12px">Use the admin account you created in Supabase (e.g. admin@suthisa.co.za).</p>'
+    +'<p class="muted" style="margin-top:12px">Distributors: type your <b>login name</b> (e.g. <code>noma.mkhwane</code>). Admins: use your email.</p>'
     +'</div></main>';
   document.getElementById('lf').addEventListener('submit', function(ev){
     ev.preventDefault();
     var btn=document.getElementById('sb'); btn.disabled=true; btn.textContent='Signing in…';
-    sb.auth.signInWithPassword({email:document.getElementById('em').value, password:document.getElementById('pw').value})
+    var raw=(document.getElementById('em').value||'').trim().toLowerCase();
+    var email=raw.indexOf('@')>=0 ? raw : raw+'@suthisa.app';  // distributors type just name.surname; admins type a full email
+    sb.auth.signInWithPassword({email:email, password:document.getElementById('pw').value})
       .then(function(r){ if(r.error){ renderLogin(r.error.message); } /* success handled by onAuthStateChange */ })
       .catch(function(e){ renderLogin(String(e && e.message || e)); });
   });
