@@ -118,6 +118,7 @@ function renderRoute(){
   if(me.role==='admin' && !me.stockOnly){
     // full admin
     if(r.view==='admin' && r.id==='orders'){ return viewAdminOrders(); }
+    if(r.view==='admin' && r.id==='depots'){ return viewAdminDepots(); }
     if(r.view==='distributors'){ return loadDistributors(); }
     return loadCatalogue(); // default admin view (Products & stock)
   }
@@ -189,7 +190,8 @@ function shell(inner, view){
     nav='<div class="nav">'
       +'<button class="tab'+(view==='catalogue'?' active':'')+'" data-nav="#/">Products &amp; stock</button>'
       +'<button class="tab'+(view==='distributors'?' active':'')+'" data-nav="#/distributors">Distributors</button>'
-      +'<button class="tab'+(view==='adminorders'?' active':'')+'" data-nav="#/admin/orders">Orders</button></div>';
+      +'<button class="tab'+(view==='adminorders'?' active':'')+'" data-nav="#/admin/orders">Orders</button>'
+      +'<button class="tab'+(view==='admindepots'?' active':'')+'" data-nav="#/admin/depots">Depots</button></div>';
   } else if(me.role==='distributor' && distributorApproved){
     nav='<div class="nav">'
       +'<button class="tab'+(view==='shop'?' active':'')+'" data-nav="#/shop">Shop</button>'
@@ -495,6 +497,56 @@ function viewAdminOrders(){
         if(vb){ if(!confirm('Mark this EFT payment as verified / paid?')) return; var pid=vb.getAttribute('data-pid'), oid=vb.getAttribute('data-oid'); sb.from('payments').update({status:'verified', verified_by:me.user.id, verified_at:new Date().toISOString()}).eq('id',pid).then(function(rr){ if(rr.error){ alert('Verify failed: '+rr.error.message); return; } sb.from('orders').update({payment_status:'paid'}).eq('id',oid).then(function(){ viewAdminOrders(); }); }); return; }
       });
     });
+}
+
+/* ---------- depots (admin) ---------- */
+function viewAdminDepots(){
+  shell('<div class="h1">Depots</div><p class="sub">Collection points distributors can choose at checkout. Edits save automatically; untick <b>active</b> to hide a depot without deleting it.</p><div id="dep" class="muted">Loading…</div>', 'admindepots');
+  sb.from('depots').select('id,name,address,is_active').order('name').then(function(r){
+    var box=document.getElementById('dep');
+    if(r.error){ box.innerHTML='<div class="msg err">Could not load depots: '+esc(r.error.message)+'</div>'; return; }
+    var ds=r.data||[];
+    var rows=ds.map(function(d){
+      return '<tr>'
+        +'<td><input type="text" data-f="name" data-id="'+d.id+'" value="'+esc(d.name)+'" style="width:100%;min-width:140px"></td>'
+        +'<td><input type="text" data-f="address" data-id="'+d.id+'" value="'+esc(d.address)+'" style="width:100%;min-width:200px"></td>'
+        +'<td><label class="muted" style="white-space:nowrap"><input type="checkbox" data-active data-id="'+d.id+'"'+(d.is_active?' checked':'')+' style="width:auto"> active</label></td>'
+        +'<td><button class="btn btn-ghost btn-sm" data-del="'+d.id+'" style="border-color:var(--red);color:var(--red)">Delete</button></td></tr>';
+    }).join('')||'<tr><td colspan="4" class="muted">No depots yet — add one below.</td></tr>';
+    box.innerHTML='<div class="tablewrap"><table><thead><tr><th>Name</th><th>Address</th><th>Active</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+      +'<div class="card" style="margin-top:14px;max-width:520px"><b>Add a depot</b>'
+      +'<label>Name</label><input type="text" id="ndname" placeholder="e.g. Piet Retief depot">'
+      +'<label>Address</label><input type="text" id="ndaddr" placeholder="Street, town">'
+      +'<button class="btn" id="ndadd" style="margin-top:10px">Add depot</button></div><div id="depmsg"></div>';
+    function depMsg(html){ var m=document.getElementById('depmsg'); if(!m) return; m.innerHTML=html; if(html) setTimeout(function(){ if(m) m.innerHTML=''; }, 2500); }
+    box.addEventListener('change', function(ev){
+      var el=ev.target;
+      if(el.getAttribute && el.getAttribute('data-f')){
+        var v=(el.value||'').trim();
+        if(!v){ depMsg('<div class="msg err">Name/address cannot be empty.</div>'); viewAdminDepots(); return; }
+        var patch={}; patch[el.getAttribute('data-f')]=v; el.disabled=true;
+        sb.from('depots').update(patch).eq('id', el.getAttribute('data-id')).then(function(rr){ el.disabled=false; depMsg(rr.error?'<div class="msg err">Save failed: '+esc(rr.error.message)+'</div>':'<div class="msg ok">Saved ✓</div>'); });
+        return;
+      }
+      if(el.hasAttribute && el.hasAttribute('data-active')){
+        el.disabled=true;
+        sb.from('depots').update({is_active:el.checked}).eq('id', el.getAttribute('data-id')).then(function(rr){ el.disabled=false; depMsg(rr.error?'<div class="msg err">Save failed: '+esc(rr.error.message)+'</div>':'<div class="msg ok">Saved ✓</div>'); });
+        return;
+      }
+    });
+    box.addEventListener('click', function(ev){
+      var del=ev.target.closest ? ev.target.closest('[data-del]') : null;
+      if(del){ if(!confirm('Delete this depot? (If it is used by an existing order, deletion will be blocked — untick "active" instead.)')) return;
+        sb.from('depots').delete().eq('id', del.getAttribute('data-del')).then(function(rr){ if(rr.error){ depMsg('<div class="msg err">Delete failed: '+esc(rr.error.message)+' — try unticking "active" instead.</div>'); return; } viewAdminDepots(); }); return; }
+      if(ev.target.id==='ndadd'){
+        var name=(document.getElementById('ndname').value||'').trim(), addr=(document.getElementById('ndaddr').value||'').trim();
+        if(!name || !addr){ depMsg('<div class="msg err">Name and address are both required.</div>'); return; }
+        ev.target.disabled=true;
+        sb.from('depots').insert({name:name, address:addr, is_active:true}).then(function(rr){ ev.target.disabled=false; if(rr.error){ depMsg('<div class="msg err">Add failed: '+esc(rr.error.message)+'</div>'); return; } viewAdminDepots(); });
+        return;
+      }
+    });
+  });
 }
 
 /* ---------- distributors (admin) ---------- */
