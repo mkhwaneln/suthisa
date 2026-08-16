@@ -86,7 +86,7 @@ if(SUPABASE_URL.indexOf('PASTE_')===0 || SUPABASE_ANON_KEY.indexOf('PASTE_')===0
 }
 
 var sb=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-var me={user:null, role:null, name:null};
+var me={user:null, role:null, name:null, stockOnly:false};
 
 /* ---------- boot ---------- */
 sb.auth.getSession().then(function(res){
@@ -94,7 +94,7 @@ sb.auth.getSession().then(function(res){
 });
 sb.auth.onAuthStateChange(function(_e, session){
   if(session && session.user){ if(!me.user) onSignedIn(session.user); }
-  else { me={user:null,role:null,name:null}; renderLogin(); }
+  else { me={user:null,role:null,name:null,stockOnly:false}; renderLogin(); }
 });
 
 /* ---------- login ---------- */
@@ -103,10 +103,10 @@ function renderLogin(msg){
     +'<div class="brand" style="color:var(--green-dark);font-size:20px;margin-bottom:2px">SUTHISA</div>'
     +'<div class="h1">Sign in</div><p class="sub">Log in to manage the catalogue.</p>'
     +(msg?'<div class="msg err">'+esc(msg)+'</div>':'')
-    +'<form id="lf"><label>Login name or email</label><input type="text" id="em" required autocomplete="username" placeholder="e.g. noma.mkhwane">'
+    +'<form id="lf"><label>Login name or email</label><input type="text" id="em" required autocomplete="username" placeholder="Admin, Stock, or name.surname">'
     +'<label>Password</label><div class="pwwrap"><input type="password" id="pw" required autocomplete="current-password"><button type="button" class="pwtoggle" data-target="pw" aria-label="Show password">👁</button></div>'
     +'<button class="btn btn-block" style="margin-top:16px" id="sb">Sign in</button></form>'
-    +'<p class="muted" style="margin-top:12px">Distributors: type your <b>login name</b> (e.g. <code>noma.mkhwane</code>). Admins: use your email.</p>'
+    +'<p class="muted" style="margin-top:12px">Admin: type <code>Admin</code> · Stock-taker: <code>Stock</code> · Distributors: your <code>name.surname</code>.</p>'
     +'</div></main>';
   document.getElementById('lf').addEventListener('submit', function(ev){
     ev.preventDefault();
@@ -122,22 +122,25 @@ function renderLogin(msg){
 /* ---------- signed in ---------- */
 function onSignedIn(user){
   me.user=user;
-  sb.from('profiles').select('role,full_name').eq('id', user.id).single().then(function(r){
+  sb.from('profiles').select('*').eq('id', user.id).single().then(function(r){
     me.role=(r.data && r.data.role) || 'unknown';
     me.name=(r.data && r.data.full_name) || user.email;
-    loadCatalogue();
+    me.stockOnly=!!(r.data && r.data.stock_only);   // DB-enforced stock-taker admin
+    if(me.stockOnly) loadStock(); else loadCatalogue();
   });
 }
 function shell(inner, view){
-  var nav = me.role==='admin'
+  var fullAdmin = me.role==='admin' && !me.stockOnly;
+  var nav = fullAdmin
     ? '<div class="nav"><button class="tab'+(view==='distributors'?'':' active')+'" data-view="catalogue">Products &amp; stock</button>'
       +'<button class="tab'+(view==='distributors'?' active':'')+'" data-view="distributors">Distributors</button></div>'
     : '';
+  var roleLabel = me.stockOnly ? 'stock' : me.role;
   root.innerHTML='<header class="top"><div class="brand">SUTHISA<small>Maize Meal</small></div><div class="spacer"></div>'
-    +'<div class="whoami">'+esc(me.user.email)+' <span class="role">'+esc(me.role)+'</span></div>'
+    +'<div class="whoami">'+esc(me.user.email)+' <span class="role">'+esc(roleLabel)+'</span></div>'
     +'<button class="btn btn-ghost btn-sm" id="out">Sign out</button></header>'+nav+'<main id="main">'+inner+'</main>';
   var o=document.getElementById('out'); if(o) o.addEventListener('click', function(){ sb.auth.signOut(); });
-  if(me.role==='admin'){
+  if(fullAdmin){
     Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){
       b.addEventListener('click', function(){ b.getAttribute('data-view')==='distributors' ? loadDistributors() : loadCatalogue(); });
     });
@@ -182,6 +185,37 @@ function loadCatalogue(){
       }
     });
 }
+/* ---------- stock-taker admin (stock quantities only) ---------- */
+function loadStock(){
+  shell('<div class="h1">Stock take</div><p class="sub">Update stock quantities only — prices are managed by an admin. Changes save automatically.</p><div id="stk" class="muted">Loading…</div>', 'stock');
+  sb.from('products').select('id,name,product_variants(id,size_kg,stock_qty,low_stock_threshold)').order('name')
+    .then(function(r){
+      var box=document.getElementById('stk');
+      if(r.error){ box.innerHTML='<div class="msg err">Could not load stock: '+esc(r.error.message)+'</div>'; return; }
+      var products=r.data||[];
+      if(!products.length){ box.innerHTML='<div class="msg">No products yet.</div>'; return; }
+      box.innerHTML=products.map(function(p){
+        var variants=(p.product_variants||[]).slice().sort(function(a,b){return a.size_kg-b.size_kg;});
+        var rows=variants.map(function(v){
+          var low=v.stock_qty<=(v.low_stock_threshold==null?10:v.low_stock_threshold);
+          return '<tr><td>'+v.size_kg+' kg</td><td><input type="number" min="0" class="stock" data-id="'+v.id+'" value="'+v.stock_qty+'"> '+(low?'<span class="pill '+(v.stock_qty<=0?'red':'amber')+'">low</span>':'')+'</td></tr>';
+        }).join('')||'<tr><td colspan="2" class="muted">No sizes.</td></tr>';
+        return '<div class="card" style="margin-bottom:14px"><b>'+esc(p.name)+'</b><div class="tablewrap"><table><thead><tr><th>Size</th><th>Stock</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+      }).join('')+'<div id="savemsg"></div>';
+      box.addEventListener('change', function(ev){
+        var el=ev.target; if(!el.getAttribute || !el.classList || !el.classList.contains('stock')) return;
+        var vid=el.getAttribute('data-id'), qty=parseInt(el.value||0,10);
+        el.disabled=true;
+        sb.rpc('set_variant_stock', { p_variant_id: vid, p_qty: qty }).then(function(rr){   // DB function: stock only, never prices
+          el.disabled=false;
+          var m=document.getElementById('savemsg');
+          m.innerHTML = rr.error ? '<div class="msg err">Save failed: '+esc(rr.error.message)+'</div>' : '<div class="msg ok">Saved ✓</div>';
+          setTimeout(function(){ if(m) m.innerHTML=''; }, 2000);
+        });
+      });
+    });
+}
+
 /* ---------- distributors (admin) ---------- */
 function distStatusPill(s){
   if(s==='approved') return '<span class="pill">approved</span>';
