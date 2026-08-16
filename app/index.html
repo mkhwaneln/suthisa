@@ -38,7 +38,7 @@ tbody tr:nth-child(even){background:#f7faf8}
 .flag{background:#111827;color:#ffe9a8;text-align:center;font-size:12px;padding:5px 8px}
 .muted{color:var(--muted);font-size:13px}
 .loginwrap{max-width:380px;margin:8vh auto 0}
-.nav{max-width:900px;margin:0 auto;padding:14px 16px 0;display:flex;gap:8px}
+.nav{max-width:900px;margin:0 auto;padding:14px 16px 0;display:flex;gap:8px;flex-wrap:wrap}
 .tab{border:1.5px solid var(--green);background:#fff;color:var(--green-dark);border-radius:10px;padding:8px 14px;font-weight:700;font-size:14px;cursor:pointer}
 .tab.active{background:var(--green);color:#fff}
 .actions{white-space:nowrap}.actions .btn{margin-right:6px}
@@ -119,6 +119,7 @@ function renderRoute(){
     // full admin
     if(r.view==='admin' && r.id==='orders'){ return viewAdminOrders(); }
     if(r.view==='admin' && r.id==='depots'){ return viewAdminDepots(); }
+    if(r.view==='admin' && r.id==='settings'){ return viewAdminSettings(); }
     if(r.view==='distributors'){ return loadDistributors(); }
     return loadCatalogue(); // default admin view (Products & stock)
   }
@@ -191,7 +192,8 @@ function shell(inner, view){
       +'<button class="tab'+(view==='catalogue'?' active':'')+'" data-nav="#/">Products &amp; stock</button>'
       +'<button class="tab'+(view==='distributors'?' active':'')+'" data-nav="#/distributors">Distributors</button>'
       +'<button class="tab'+(view==='adminorders'?' active':'')+'" data-nav="#/admin/orders">Orders</button>'
-      +'<button class="tab'+(view==='admindepots'?' active':'')+'" data-nav="#/admin/depots">Depots</button></div>';
+      +'<button class="tab'+(view==='admindepots'?' active':'')+'" data-nav="#/admin/depots">Depots</button>'
+      +'<button class="tab'+(view==='adminsettings'?' active':'')+'" data-nav="#/admin/settings">Settings</button></div>';
   } else if(me.role==='distributor' && distributorApproved){
     nav='<div class="nav">'
       +'<button class="tab'+(view==='shop'?' active':'')+'" data-nav="#/shop">Shop</button>'
@@ -497,6 +499,49 @@ function viewAdminOrders(){
         if(vb){ if(!confirm('Mark this EFT payment as verified / paid?')) return; var pid=vb.getAttribute('data-pid'), oid=vb.getAttribute('data-oid'); sb.from('payments').update({status:'verified', verified_by:me.user.id, verified_at:new Date().toISOString()}).eq('id',pid).then(function(rr){ if(rr.error){ alert('Verify failed: '+rr.error.message); return; } sb.from('orders').update({payment_status:'paid'}).eq('id',oid).then(function(){ viewAdminOrders(); }); }); return; }
       });
     });
+}
+
+/* ---------- business settings (admin) ---------- */
+function viewAdminSettings(){
+  shell('<div class="h1">Business settings</div><p class="sub">Bank details (shown to distributors paying by EFT) and the delivery fee. Saved to your Supabase database.</p><div id="bset" class="muted">Loading…</div>', 'adminsettings');
+  sb.from('business_settings').select('*').maybeSingle().then(function(r){
+    var box=document.getElementById('bset');
+    if(r.error){ box.innerHTML='<div class="msg err">Could not load settings: '+esc(r.error.message)+'</div>'; return; }
+    var s=r.data||{};
+    function val(k){ return esc(s[k]==null?'':s[k]); }
+    var feeR = s.default_delivery_fee_cents!=null ? (s.default_delivery_fee_cents/100).toFixed(2) : '';
+    box.innerHTML='<form id="bsform" class="card" style="max-width:520px">'
+      +'<b>Bank details (EFT)</b>'
+      +'<label>Bank name</label><input name="bank_name" value="'+val('bank_name')+'" placeholder="e.g. FNB">'
+      +'<label>Account name</label><input name="account_name" value="'+val('account_name')+'" placeholder="Suthisa Milling">'
+      +'<label>Account number</label><input name="account_number" value="'+val('account_number')+'">'
+      +'<label>Branch code</label><input name="branch_code" value="'+val('branch_code')+'">'
+      +'<label>EFT reference prefix</label><input name="eft_reference_prefix" value="'+val('eft_reference_prefix')+'" placeholder="SUTHISA-">'
+      +'<hr style="border:none;border-top:1px solid var(--line);margin:16px 0"><b>Delivery</b>'
+      +'<label>Delivery fee (Rands)</label><input name="delivery_fee" type="number" min="0" step="0.01" value="'+feeR+'" placeholder="0.00">'
+      +'<button class="btn btn-block" id="bsave" type="button" style="margin-top:16px">Save settings</button>'
+      +'</form><div id="bsmsg"></div>';
+    document.getElementById('bsave').addEventListener('click', function(){
+      var f=document.getElementById('bsform');
+      var fee=parseFloat(f.delivery_fee.value||'0'); if(isNaN(fee)||fee<0) fee=0;
+      function trimOrNull(x){ x=(x||'').trim(); return x||null; }
+      var patch={ id:true,
+        bank_name:trimOrNull(f.bank_name.value),
+        account_name:trimOrNull(f.account_name.value),
+        account_number:trimOrNull(f.account_number.value),
+        branch_code:trimOrNull(f.branch_code.value),
+        eft_reference_prefix:trimOrNull(f.eft_reference_prefix.value),
+        default_delivery_fee_cents:Math.round(fee*100) };
+      var btn=document.getElementById('bsave'); btn.disabled=true; btn.textContent='Saving…';
+      sb.from('business_settings').upsert(patch, {onConflict:'id'}).then(function(rr){
+        btn.disabled=false; btn.textContent='Save settings';
+        var m=document.getElementById('bsmsg');
+        m.innerHTML=rr.error?'<div class="msg err">Save failed: '+esc(rr.error.message)+'</div>':'<div class="msg ok">Saved ✓</div>';
+        settingsCache=null; // so checkout re-fetches the new bank details / delivery fee
+        if(!rr.error) setTimeout(function(){ if(m) m.innerHTML=''; }, 2500);
+      });
+    });
+  });
 }
 
 /* ---------- depots (admin) ---------- */
