@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suthisa — App (live)</title>
+<style>
+:root{--green:#008000;--green-dark:#006400;--green-soft:#E0EFE0;--yellow:#FFFF00;--ink:#1f2937;--muted:#6b7280;--line:#e5e7eb;--bg:#f5f7f5;--red:#b91c1c;--amber:#b7791f;}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+header.top{background:var(--green);color:#fff;border-bottom:5px solid var(--yellow);padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.brand{font-weight:800;letter-spacing:1px}.brand small{display:block;font-size:10px;letter-spacing:2px;opacity:.85;text-transform:uppercase;font-weight:500}
+.spacer{flex:1}
+.whoami{font-size:13px;opacity:.95}
+main{max-width:900px;margin:0 auto;padding:20px 16px 80px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;margin:0 auto}
+.h1{font-size:22px;font-weight:800;color:var(--green-dark);margin:0 0 4px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 16px}
+label{display:block;font-size:13px;font-weight:600;margin:10px 0 4px}
+input{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;font-family:inherit}
+td input{width:96px;padding:6px 8px;font-size:14px}
+td input.stock{width:70px}
+.btn{border:0;border-radius:10px;padding:11px 16px;font-weight:700;font-size:15px;background:var(--green);color:#fff;cursor:pointer}
+.btn:hover{background:var(--green-dark)}.btn:disabled{opacity:.6;cursor:not-allowed}
+.btn-block{display:block;width:100%}
+.btn-ghost{background:#fff;color:var(--green-dark);border:1.5px solid var(--green)}
+.btn-sm{padding:7px 11px;font-size:13px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin-top:12px}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:520px;background:#fff}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+th{background:var(--green);color:#fff;font-weight:600}
+tbody tr:nth-child(even){background:#f7faf8}
+.msg{padding:10px 14px;border-radius:10px;font-size:14px;margin:10px 0}
+.msg.err{background:#fde3e3;color:var(--red)}
+.msg.ok{background:var(--green-soft);color:var(--green-dark)}
+.pill{display:inline-block;font-size:12px;font-weight:700;padding:3px 9px;border-radius:20px;background:var(--green-soft);color:var(--green-dark)}
+.pill.amber{background:#fdf3d7;color:var(--amber)}.pill.red{background:#fde3e3;color:var(--red)}
+.role{background:var(--yellow);color:var(--green-dark);font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px}
+.flag{background:#111827;color:#ffe9a8;text-align:center;font-size:12px;padding:5px 8px}
+.muted{color:var(--muted);font-size:13px}
+.loginwrap{max-width:380px;margin:8vh auto 0}
+.nav{max-width:900px;margin:0 auto;padding:14px 16px 0;display:flex;gap:8px}
+.tab{border:1.5px solid var(--green);background:#fff;color:var(--green-dark);border-radius:10px;padding:8px 14px;font-weight:700;font-size:14px;cursor:pointer}
+.tab.active{background:var(--green);color:#fff}
+.actions{white-space:nowrap}.actions .btn{margin-right:6px}
+</style>
+</head>
+<body>
+<div class="flag">🔌 <b>Live app</b> — connected to Supabase (login + catalogue + distributors). Not the offline demo.</div>
+<div id="root"><main><div class="card loginwrap">Loading…</div></main></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* =====================================================================
+   CONFIG — paste your Supabase project values here.
+   Find them in Supabase: Project Settings → API
+     • Project URL              → SUPABASE_URL
+     • Project API keys → anon  → SUPABASE_ANON_KEY   (safe for the browser)
+   Do NOT paste the service_role key here.
+   ===================================================================== */
+var SUPABASE_URL = 'https://jhtlvlyjcolotfnzykpf.supabase.co';
+var SUPABASE_ANON_KEY = 'sb_publishable_hkq0tpLDFwTmpK-50e-vug_LyIZVU04';
+
+(function(){
+"use strict";
+var root=document.getElementById('root');
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];});}
+function zar(c){var v=((c||0)/100).toFixed(2).split('.');return 'R '+v[0].replace(/\B(?=(\d{3})+(?!\d))/g,' ')+','+v[1];}
+
+/* config guard */
+if(!window.supabase){root.innerHTML='<main><div class="card loginwrap"><div class="msg err">Could not load the Supabase library. Check your internet connection and reload.</div></div></main>';return;}
+if(SUPABASE_URL.indexOf('PASTE_')===0 || SUPABASE_ANON_KEY.indexOf('PASTE_')===0){
+  root.innerHTML='<main><div class="card loginwrap"><div class="h1">Almost there</div><p class="sub">Add your Supabase keys to switch this on.</p>'
+    +'<p class="muted">Open <b>app/index.html</b>, and near the top of the script set <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> from your Supabase dashboard (Project Settings → API). Then reload.</p></div></main>';
+  return;
+}
+
+var sb=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+var me={user:null, role:null, name:null};
+
+/* ---------- boot ---------- */
+sb.auth.getSession().then(function(res){
+  if(res.data.session){ onSignedIn(res.data.session.user); } else { renderLogin(); }
+});
+sb.auth.onAuthStateChange(function(_e, session){
+  if(session && session.user){ if(!me.user) onSignedIn(session.user); }
+  else { me={user:null,role:null,name:null}; renderLogin(); }
+});
+
+/* ---------- login ---------- */
+function renderLogin(msg){
+  root.innerHTML='<main><div class="card loginwrap">'
+    +'<div class="brand" style="color:var(--green-dark);font-size:20px;margin-bottom:2px">SUTHISA</div>'
+    +'<div class="h1">Sign in</div><p class="sub">Log in to manage the catalogue.</p>'
+    +(msg?'<div class="msg err">'+esc(msg)+'</div>':'')
+    +'<form id="lf"><label>Email</label><input type="email" id="em" required autocomplete="username">'
+    +'<label>Password</label><input type="password" id="pw" required autocomplete="current-password">'
+    +'<button class="btn btn-block" style="margin-top:16px" id="sb">Sign in</button></form>'
+    +'<p class="muted" style="margin-top:12px">Use the admin account you created in Supabase (e.g. admin@suthisa.co.za).</p>'
+    +'</div></main>';
+  document.getElementById('lf').addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var btn=document.getElementById('sb'); btn.disabled=true; btn.textContent='Signing in…';
+    sb.auth.signInWithPassword({email:document.getElementById('em').value, password:document.getElementById('pw').value})
+      .then(function(r){ if(r.error){ renderLogin(r.error.message); } /* success handled by onAuthStateChange */ })
+      .catch(function(e){ renderLogin(String(e && e.message || e)); });
+  });
+}
+
+/* ---------- signed in ---------- */
+function onSignedIn(user){
+  me.user=user;
+  sb.from('profiles').select('role,full_name').eq('id', user.id).single().then(function(r){
+    me.role=(r.data && r.data.role) || 'unknown';
+    me.name=(r.data && r.data.full_name) || user.email;
+    loadCatalogue();
+  });
+}
+function shell(inner, view){
+  var nav = me.role==='admin'
+    ? '<div class="nav"><button class="tab'+(view==='distributors'?'':' active')+'" data-view="catalogue">Products &amp; stock</button>'
+      +'<button class="tab'+(view==='distributors'?' active':'')+'" data-view="distributors">Distributors</button></div>'
+    : '';
+  root.innerHTML='<header class="top"><div class="brand">SUTHISA<small>Maize Meal</small></div><div class="spacer"></div>'
+    +'<div class="whoami">'+esc(me.user.email)+' <span class="role">'+esc(me.role)+'</span></div>'
+    +'<button class="btn btn-ghost btn-sm" id="out">Sign out</button></header>'+nav+'<main id="main">'+inner+'</main>';
+  var o=document.getElementById('out'); if(o) o.addEventListener('click', function(){ sb.auth.signOut(); });
+  if(me.role==='admin'){
+    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){
+      b.addEventListener('click', function(){ b.getAttribute('data-view')==='distributors' ? loadDistributors() : loadCatalogue(); });
+    });
+  }
+}
+
+function loadCatalogue(){
+  shell('<div class="h1">Products &amp; stock</div><p class="sub">Live data from your Supabase database'+(me.role==='admin'?' — edit prices (R) and stock; changes save automatically.':' (read-only).')+'</p><div id="cat" class="muted">Loading catalogue…</div>', 'catalogue');
+  sb.from('products').select('id,name,category,product_variants(id,size_kg,wholesale_price_cents,retail_price_cents,stock_qty,low_stock_threshold)').order('name')
+    .then(function(r){
+      var cat=document.getElementById('cat');
+      if(r.error){ cat.innerHTML='<div class="msg err">Could not load products: '+esc(r.error.message)+'</div>'; return; }
+      var products=r.data||[];
+      if(!products.length){ cat.innerHTML='<div class="msg">No products yet. (Run <code>002_seed.sql</code> in Supabase, or add products.)</div>'; return; }
+      var admin=me.role==='admin';
+      cat.innerHTML=products.map(function(p){
+        var variants=(p.product_variants||[]).slice().sort(function(a,b){return a.size_kg-b.size_kg;});
+        var rows=variants.map(function(v){
+          var low=v.stock_qty<=(v.low_stock_threshold==null?10:v.low_stock_threshold);
+          var wCell=admin?'R <input type="number" min="0" step="0.01" data-f="wholesale_price_cents" data-id="'+v.id+'" value="'+(v.wholesale_price_cents/100).toFixed(2)+'">':zar(v.wholesale_price_cents);
+          var rCell=admin?'R <input type="number" min="0" step="0.01" data-f="retail_price_cents" data-id="'+v.id+'" value="'+(v.retail_price_cents/100).toFixed(2)+'">':zar(v.retail_price_cents);
+          var sCell=admin?'<input type="number" min="0" class="stock" data-f="stock_qty" data-id="'+v.id+'" value="'+v.stock_qty+'">':v.stock_qty;
+          return '<tr><td>'+v.size_kg+' kg</td><td>'+wCell+'</td><td>'+rCell+'</td><td>'+sCell+' '+(low?'<span class="pill '+(v.stock_qty<=0?'red':'amber')+'">low</span>':'')+'</td><td><b>'+zar(v.wholesale_price_cents*v.stock_qty)+'</b></td></tr>';
+        }).join('')||'<tr><td colspan="4" class="muted">No sizes.</td></tr>';
+        return '<div class="card" style="margin-bottom:14px"><b>'+esc(p.name)+'</b> <span class="muted">'+esc(p.category||'')+'</span>'
+          +'<div class="tablewrap"><table><thead><tr><th>Size</th><th>Wholesale</th><th>Retail</th><th>Stock</th><th>Value (wholesale)</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+      }).join('')+'<div id="savemsg"></div>';
+      if(admin){
+        cat.addEventListener('change', function(ev){
+          var el=ev.target; if(!el.getAttribute || !el.getAttribute('data-f')) return;
+          var field=el.getAttribute('data-f'), vid=el.getAttribute('data-id');
+          var val = field==='stock_qty' ? parseInt(el.value||0,10) : Math.round(parseFloat(el.value||0)*100);
+          var patch={}; patch[field]=val;
+          el.disabled=true;
+          sb.from('product_variants').update(patch).eq('id', vid).then(function(r){
+            el.disabled=false;
+            var m=document.getElementById('savemsg');
+            m.innerHTML = r.error ? '<div class="msg err">Save failed: '+esc(r.error.message)+'</div>' : '<div class="msg ok">Saved ✓</div>';
+            setTimeout(function(){ if(m) m.innerHTML=''; }, 2000);
+          });
+        });
+      }
+    });
+}
+/* ---------- distributors (admin) ---------- */
+function distStatusPill(s){
+  if(s==='approved') return '<span class="pill">approved</span>';
+  if(s==='pending') return '<span class="pill amber">pending</span>';
+  if(s==='suspended') return '<span class="pill red">suspended</span>';
+  return '<span class="pill red">'+esc(s||'—')+'</span>';
+}
+function distActions(d){
+  if(d.status==='approved') return '<button class="btn btn-ghost btn-sm" data-act="suspend" data-id="'+d.id+'">Suspend</button>';
+  if(d.status==='pending')  return '<button class="btn btn-sm" data-act="approve" data-id="'+d.id+'">Approve</button><button class="btn btn-ghost btn-sm" data-act="reject" data-id="'+d.id+'">Reject</button>';
+  if(d.status==='suspended')return '<button class="btn btn-sm" data-act="approve" data-id="'+d.id+'">Re-activate</button>';
+  return '<button class="btn btn-sm" data-act="approve" data-id="'+d.id+'">Approve</button>';
+}
+function loadDistributors(){
+  shell('<div class="h1">Distributors</div><p class="sub">Live from your Supabase database'+(me.role==='admin'?' — approve, suspend or reject accounts.':'.')+'</p><div id="dist" class="muted">Loading distributors…</div>', 'distributors');
+  sb.from('distributors').select('id,name,surname,login_name,phone,alternatephone,city,province,status').order('name')
+    .then(function(r){
+      var box=document.getElementById('dist');
+      if(r.error){ box.innerHTML='<div class="msg err">Could not load distributors: '+esc(r.error.message)+'</div>'; return; }
+      var ds=r.data||[];
+      if(!ds.length){ box.innerHTML='<div class="msg">No distributors found.</div>'; return; }
+      var admin=me.role==='admin';
+      var rows=ds.map(function(d){
+        var full=esc(((d.name||'')+' '+(d.surname||'')).trim());
+        var loc=[d.city,d.province].filter(Boolean).map(esc).join(', ');
+        var phone=esc(d.phone||'')+(d.alternatephone?'<div class="muted">'+esc(d.alternatephone)+'</div>':'');
+        return '<tr><td><b>'+full+'</b><div class="muted">'+esc(d.login_name||'')+'</div></td>'
+          +'<td>'+phone+'</td><td>'+loc+'</td><td>'+distStatusPill(d.status)+'</td>'
+          +(admin?'<td class="actions">'+distActions(d)+'</td>':'')+'</tr>';
+      }).join('');
+      box.innerHTML='<p class="muted">'+ds.length+' distributor'+(ds.length===1?'':'s')+'.</p>'
+        +'<div class="tablewrap"><table><thead><tr><th>Name / login</th><th>Phone</th><th>Location</th><th>Status</th>'+(admin?'<th>Actions</th>':'')+'</tr></thead><tbody>'+rows+'</tbody></table></div><div id="distmsg"></div>';
+      if(admin){
+        box.addEventListener('click', function(ev){
+          var el=ev.target.closest ? ev.target.closest('[data-act]') : null; if(!el) return;
+          var act=el.getAttribute('data-act'), id=el.getAttribute('data-id');
+          var status = act==='approve'?'approved' : act==='suspend'?'suspended' : act==='reject'?'rejected' : null;
+          if(!status) return;
+          var patch={status:status}; if(status==='approved'){ patch.approved_at=new Date().toISOString(); patch.approved_by=me.user.id; }
+          el.disabled=true;
+          sb.from('distributors').update(patch).eq('id', id).then(function(rr){
+            if(rr.error){ el.disabled=false; document.getElementById('distmsg').innerHTML='<div class="msg err">Update failed: '+esc(rr.error.message)+'</div>'; return; }
+            loadDistributors();
+          });
+        });
+      }
+    });
+}
+})();
+</script>
+</body>
+</html>
