@@ -42,6 +42,9 @@ tbody tr:nth-child(even){background:#f7faf8}
 .tab{border:1.5px solid var(--green);background:#fff;color:var(--green-dark);border-radius:10px;padding:8px 14px;font-weight:700;font-size:14px;cursor:pointer}
 .tab.active{background:var(--green);color:#fff}
 .actions{white-space:nowrap}.actions .btn{margin-right:6px}
+.pwwrap{position:relative}.pwwrap input{padding-right:44px}
+.pwtoggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;font-size:18px;line-height:1;cursor:pointer;padding:4px;opacity:.7}
+.pwtoggle:hover{opacity:1}
 </style>
 </head>
 <body>
@@ -65,6 +68,14 @@ var SUPABASE_ANON_KEY = 'sb_publishable_hkq0tpLDFwTmpK-50e-vug_LyIZVU04';
 var root=document.getElementById('root');
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];});}
 function zar(c){var v=((c||0)/100).toFixed(2).split('.');return 'R '+v[0].replace(/\B(?=(\d{3})+(?!\d))/g,' ')+','+v[1];}
+/* show/hide password toggle (delegated — works for any .pwtoggle) */
+document.addEventListener('click', function(ev){
+  var b=ev.target.closest ? ev.target.closest('.pwtoggle') : null; if(!b) return;
+  ev.preventDefault();
+  var inp=document.getElementById(b.getAttribute('data-target')); if(!inp) return;
+  var show=inp.type==='password'; inp.type=show?'text':'password';
+  b.textContent=show?'🙈':'👁'; b.setAttribute('aria-label', show?'Hide password':'Show password');
+});
 
 /* config guard */
 if(!window.supabase){root.innerHTML='<main><div class="card loginwrap"><div class="msg err">Could not load the Supabase library. Check your internet connection and reload.</div></div></main>';return;}
@@ -93,7 +104,7 @@ function renderLogin(msg){
     +'<div class="h1">Sign in</div><p class="sub">Log in to manage the catalogue.</p>'
     +(msg?'<div class="msg err">'+esc(msg)+'</div>':'')
     +'<form id="lf"><label>Email</label><input type="email" id="em" required autocomplete="username">'
-    +'<label>Password</label><input type="password" id="pw" required autocomplete="current-password">'
+    +'<label>Password</label><div class="pwwrap"><input type="password" id="pw" required autocomplete="current-password"><button type="button" class="pwtoggle" data-target="pw" aria-label="Show password">👁</button></div>'
     +'<button class="btn btn-block" style="margin-top:16px" id="sb">Sign in</button></form>'
     +'<p class="muted" style="margin-top:12px">Use the admin account you created in Supabase (e.g. admin@suthisa.co.za).</p>'
     +'</div></main>';
