@@ -230,41 +230,69 @@ function shell(inner, view){
 }
 
 function loadCatalogue(){
-  shell('<div class="h1">Products &amp; stock</div><p class="sub">Live data from your Supabase database'+(me.role==='admin'?' — edit prices (R) and stock; changes save automatically.':' (read-only).')+'</p><div id="cat" class="muted">Loading catalogue…</div>', 'catalogue');
+  shell('<div class="h1">Products &amp; stock</div><p class="sub">Edit names, sizes, prices (R) and stock — changes save automatically. Add or remove products and sizes below.</p><div id="cat" class="muted">Loading catalogue…</div>', 'catalogue');
   sb.from('products').select('id,name,category,product_variants(id,size_kg,wholesale_price_cents,retail_price_cents,stock_qty,low_stock_threshold)').order('name')
     .then(function(r){
       var cat=document.getElementById('cat');
       if(r.error){ cat.innerHTML='<div class="msg err">Could not load products: '+esc(r.error.message)+'</div>'; return; }
       var products=r.data||[];
-      if(!products.length){ cat.innerHTML='<div class="msg">No products yet. (Run <code>002_seed.sql</code> in Supabase, or add products.)</div>'; return; }
-      var admin=me.role==='admin';
+      var onlyOne=products.length<=1;
       cat.innerHTML=products.map(function(p){
         var variants=(p.product_variants||[]).slice().sort(function(a,b){return a.size_kg-b.size_kg;});
         var rows=variants.map(function(v){
           var low=v.stock_qty<=(v.low_stock_threshold==null?10:v.low_stock_threshold);
-          var wCell=admin?'R <input type="number" min="0" step="0.01" data-f="wholesale_price_cents" data-id="'+v.id+'" value="'+(v.wholesale_price_cents/100).toFixed(2)+'">':zar(v.wholesale_price_cents);
-          var rCell=admin?'R <input type="number" min="0" step="0.01" data-f="retail_price_cents" data-id="'+v.id+'" value="'+(v.retail_price_cents/100).toFixed(2)+'">':zar(v.retail_price_cents);
-          var sCell=admin?'<input type="number" min="0" class="stock" data-f="stock_qty" data-id="'+v.id+'" value="'+v.stock_qty+'">':v.stock_qty;
-          return '<tr><td>'+v.size_kg+' kg</td><td>'+wCell+'</td><td>'+rCell+'</td><td>'+sCell+' '+(low?'<span class="pill '+(v.stock_qty<=0?'red':'amber')+'">low</span>':'')+'</td><td><b>'+zar(v.wholesale_price_cents*v.stock_qty)+'</b></td></tr>';
-        }).join('')||'<tr><td colspan="4" class="muted">No sizes.</td></tr>';
-        return '<div class="card" style="margin-bottom:14px"><b>'+esc(p.name)+'</b> <span class="muted">'+esc(p.category||'')+'</span>'
-          +'<div class="tablewrap"><table><thead><tr><th>Size</th><th>Wholesale</th><th>Retail</th><th>Stock</th><th>Value (wholesale)</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
-      }).join('')+'<div id="savemsg"></div>';
-      if(admin){
-        cat.addEventListener('change', function(ev){
-          var el=ev.target; if(!el.getAttribute || !el.getAttribute('data-f')) return;
+          return '<tr>'
+            +'<td><input type="number" min="1" step="0.5" class="stock" data-f="size_kg" data-id="'+v.id+'" value="'+v.size_kg+'"> kg</td>'
+            +'<td>R <input type="number" min="0" step="0.01" data-f="wholesale_price_cents" data-id="'+v.id+'" value="'+(v.wholesale_price_cents/100).toFixed(2)+'"></td>'
+            +'<td>R <input type="number" min="0" step="0.01" data-f="retail_price_cents" data-id="'+v.id+'" value="'+(v.retail_price_cents/100).toFixed(2)+'"></td>'
+            +'<td><input type="number" min="0" class="stock" data-f="stock_qty" data-id="'+v.id+'" value="'+v.stock_qty+'"> '+(low?'<span class="pill '+(v.stock_qty<=0?'red':'amber')+'">low</span>':'')+'</td>'
+            +'<td><b>'+zar(v.wholesale_price_cents*v.stock_qty)+'</b></td>'
+            +'<td><button class="btn btn-ghost btn-sm" data-delvar="'+v.id+'" style="border-color:var(--red);color:var(--red)">Remove</button></td></tr>';
+        }).join('')||'<tr><td colspan="6" class="muted">No sizes yet — add one below.</td></tr>';
+        return '<div class="card" style="margin-bottom:14px">'
+          +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+            +'<input type="text" data-pf="name" data-pid="'+p.id+'" value="'+esc(p.name)+'" style="font-weight:700;max-width:220px" placeholder="Product name">'
+            +'<input type="text" data-pf="category" data-pid="'+p.id+'" value="'+esc(p.category||'')+'" style="max-width:160px" placeholder="Category">'
+            +'<div style="flex:1"></div>'
+            +'<button class="btn btn-ghost btn-sm" data-delprod="'+p.id+'"'+(onlyOne?' disabled title="At least one product is required"':'')+' style="border-color:var(--red);color:var(--red)">Delete product</button>'
+          +'</div>'
+          +'<div class="tablewrap"><table><thead><tr><th>Size</th><th>Wholesale</th><th>Retail</th><th>Stock</th><th>Value</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+          +'<button class="btn btn-sm" data-addsize="'+p.id+'" style="margin-top:10px;background:var(--yellow);color:var(--green-dark)">+ Add size</button>'
+        +'</div>';
+      }).join('')
+      +'<div class="card" style="max-width:520px"><b>Add a product</b>'
+        +'<label>Name</label><input type="text" id="npname" placeholder="e.g. Maize Meal">'
+        +'<label>Category</label><input type="text" id="npcat" placeholder="Maize Meal">'
+        +'<button class="btn" id="npadd" style="margin-top:10px">Add product</button></div><div id="savemsg"></div>';
+      function msg(html){ var m=document.getElementById('savemsg'); if(!m) return; m.innerHTML=html; if(html) setTimeout(function(){ if(m) m.innerHTML=''; }, 2500); }
+      cat.addEventListener('change', function(ev){
+        var el=ev.target;
+        if(el.getAttribute && el.getAttribute('data-pf')){   // product name / category
+          var pv=(el.value||'').trim();
+          if(el.getAttribute('data-pf')==='name' && !pv){ msg('<div class="msg err">Name cannot be empty.</div>'); loadCatalogue(); return; }
+          var pp={}; pp[el.getAttribute('data-pf')]=pv; el.disabled=true;
+          sb.from('products').update(pp).eq('id', el.getAttribute('data-pid')).then(function(rr){ el.disabled=false; msg(rr.error?'<div class="msg err">Save failed: '+esc(rr.error.message)+'</div>':'<div class="msg ok">Saved ✓</div>'); });
+          return;
+        }
+        if(el.getAttribute && el.getAttribute('data-f')){    // variant size / price / stock
           var field=el.getAttribute('data-f'), vid=el.getAttribute('data-id');
-          var val = field==='stock_qty' ? parseInt(el.value||0,10) : Math.round(parseFloat(el.value||0)*100);
-          var patch={}; patch[field]=val;
-          el.disabled=true;
-          sb.from('product_variants').update(patch).eq('id', vid).then(function(r){
-            el.disabled=false;
-            var m=document.getElementById('savemsg');
-            m.innerHTML = r.error ? '<div class="msg err">Save failed: '+esc(r.error.message)+'</div>' : '<div class="msg ok">Saved ✓</div>';
-            setTimeout(function(){ if(m) m.innerHTML=''; }, 2000);
-          });
-        });
-      }
+          var val = field==='stock_qty' ? parseInt(el.value||0,10) : field==='size_kg' ? parseFloat(el.value||0) : Math.round(parseFloat(el.value||0)*100);
+          if(field==='size_kg' && (!val || val<=0)){ msg('<div class="msg err">Size must be greater than 0.</div>'); loadCatalogue(); return; }
+          var patch={}; patch[field]=val; el.disabled=true;
+          sb.from('product_variants').update(patch).eq('id', vid).then(function(rr){ el.disabled=false; msg(rr.error?'<div class="msg err">Save failed: '+esc(rr.error.message)+'</div>':'<div class="msg ok">Saved ✓</div>'); });
+          return;
+        }
+      });
+      cat.addEventListener('click', function(ev){
+        var as=ev.target.closest && ev.target.closest('[data-addsize]');
+        if(as){ var kg=prompt('New size in kg (e.g. 25):'); if(kg===null) return; kg=parseFloat(kg); if(!kg||kg<=0){ msg('<div class="msg err">Enter a valid size in kg.</div>'); return; }
+          sb.from('product_variants').insert({product_id:as.getAttribute('data-addsize'), size_kg:kg, wholesale_price_cents:0, retail_price_cents:0, stock_qty:0}).then(function(rr){ msg(rr.error?'<div class="msg err">Add size failed (that size may already exist): '+esc(rr.error.message)+'</div>':''); if(!rr.error) loadCatalogue(); }); return; }
+        var dv=ev.target.closest && ev.target.closest('[data-delvar]');
+        if(dv){ if(!confirm('Remove this size?')) return; sb.from('product_variants').delete().eq('id', dv.getAttribute('data-delvar')).then(function(rr){ if(rr.error){ msg('<div class="msg err">Remove failed (it may be used by an existing order): '+esc(rr.error.message)+'</div>'); return; } loadCatalogue(); }); return; }
+        var dp=ev.target.closest && ev.target.closest('[data-delprod]');
+        if(dp){ if(!confirm('Delete this product and all its sizes?')) return; sb.from('products').delete().eq('id', dp.getAttribute('data-delprod')).then(function(rr){ if(rr.error){ msg('<div class="msg err">Delete failed (it may be used by an existing order): '+esc(rr.error.message)+'</div>'); return; } loadCatalogue(); }); return; }
+        if(ev.target.id==='npadd'){ var n=(document.getElementById('npname').value||'').trim(), c=(document.getElementById('npcat').value||'').trim()||'Maize Meal'; if(!n){ msg('<div class="msg err">Product name is required.</div>'); return; } ev.target.disabled=true; sb.from('products').insert({name:n, category:c}).then(function(rr){ ev.target.disabled=false; if(rr.error){ msg('<div class="msg err">Add failed: '+esc(rr.error.message)+'</div>'); return; } loadCatalogue(); }); return; }
+      });
     });
 }
 /* ---------- stock-taker admin (stock quantities only) ---------- */
