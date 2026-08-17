@@ -994,7 +994,7 @@ function loadDistributors(){
   var addForm = admin ? '<details style="margin-bottom:14px"><summary style="cursor:pointer;font-weight:700;color:var(--green-dark)">+ Add a distributor</summary>'
     +'<div class="card" style="max-width:560px;margin-top:10px">'
       +'<p class="muted">Creates a login (<b>name.surname</b>) with the starter password <b>Suthisa2026</b> and an approved record. Share the login + password with the distributor; they can change the password on their Profile page.</p>'
-      +'<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px"><label>Name *</label><input type="text" id="adname"></div><div style="flex:1;min-width:140px"><label>Surname</label><input type="text" id="adsurname"></div></div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px"><label>Name *</label><input type="text" id="adname"></div><div style="flex:1;min-width:140px"><label>Surname *</label><input type="text" id="adsurname"></div></div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px"><label>Phone *</label><input type="text" id="adphone"></div><div style="flex:1;min-width:140px"><label>Alternate phone</label><input type="text" id="adalt"></div></div>'
       +'<label>Contact email</label><input type="text" id="ademail">'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px"><label>City</label><input type="text" id="adcity"></div><div style="flex:1;min-width:140px"><label>Province</label><input type="text" id="adprov"></div></div>'
@@ -1010,16 +1010,16 @@ function loadDistributors(){
     var ssel=document.getElementById('distsearch'); if(ssel){ ssel.value=distSearch; ssel.addEventListener('input',function(){ distSearch=ssel.value; distPage=0; clearTimeout(ssel._t); ssel._t=setTimeout(loadDistTable,300); }); }
     var fsel=document.getElementById('distfilter'); if(fsel){ fsel.value=distFilter; fsel.addEventListener('change',function(){ distFilter=fsel.value; distPage=0; loadDistTable(); }); }
     var ab=document.getElementById('adadd'); if(ab) ab.addEventListener('click', function(){
-      var name=(document.getElementById('adname').value||'').trim(), phone=(document.getElementById('adphone').value||'').trim();
+      var name=(document.getElementById('adname').value||'').trim(), surname=(document.getElementById('adsurname').value||'').trim(), phone=(document.getElementById('adphone').value||'').trim();
       var dm=document.getElementById('distmsg');
-      if(!name || !phone){ dm.innerHTML='<div class="msg err">Name and phone are required.</div>'; return; }
-      var body={ name:name, surname:(document.getElementById('adsurname').value||'').trim(), phone:phone,
+      if(!name || !surname || !phone){ dm.innerHTML='<div class="msg err">Name, surname and phone are required.</div>'; return; }
+      var body={ name:name, surname:surname, phone:phone,
         alternatephone:(document.getElementById('adalt').value||'').trim(), email:(document.getElementById('ademail').value||'').trim(),
         city:(document.getElementById('adcity').value||'').trim(), province:(document.getElementById('adprov').value||'').trim() };
       ab.disabled=true; ab.textContent='Creating…';
       sb.functions.invoke('admin-add-distributor', { body: body }).then(function(res){
         ab.disabled=false; ab.textContent='Create distributor';
-        if(res.error){ dm.innerHTML='<div class="msg err">Add-distributor service not available yet — deploy the Edge Function <code>admin-add-distributer</code>. ('+esc(res.error.message||'')+')</div>'; return; }
+        if(res.error){ dm.innerHTML='<div class="msg err">Add-distributor service error: '+esc(res.error.message||'')+'</div>'; return; }
         if(res.data && res.data.error){ dm.innerHTML='<div class="msg err">Could not add: '+esc(res.data.error)+'</div>'; return; }
         dm.innerHTML='<div class="msg ok">Created login <b>'+esc(res.data.login_name)+'</b> · password <b>'+esc(res.data.password)+'</b> — share these with the distributor.</div>';
         distFilter='approved'; distPage=0; if(fsel) fsel.value='approved'; loadDistTable();
