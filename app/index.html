@@ -1000,12 +1000,12 @@ function loadDistributors(){
       +'<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px"><label>City</label><input type="text" id="adcity"></div><div style="flex:1;min-width:140px"><label>Province</label><input type="text" id="adprov"></div></div>'
       +'<button class="btn btn-block" id="adadd" type="button" style="margin-top:12px">Create distributor</button>'
     +'</div></details>' : '';
-  shell('<div class="h1">Distributors</div>'+addForm
+  shell('<div class="h1">Distributors</div><div id="distmsg"></div>'+addForm
     +(admin?'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'
         +'<input type="text" id="distsearch" placeholder="Search name / surname" style="max-width:240px">'
         +'<select id="distfilter" style="width:auto"><option value="approved">Approved</option><option value="pending">Pending</option><option value="suspended">Suspended</option><option value="rejected">Rejected</option><option value="all">All</option></select>'
       +'</div>':'')
-    +'<div id="disttable" class="muted">Loading…</div><div id="distmsg"></div>','distributors');
+    +'<div id="disttable" class="muted">Loading…</div>','distributors');
   if(admin){
     var ssel=document.getElementById('distsearch'); if(ssel){ ssel.value=distSearch; ssel.addEventListener('input',function(){ distSearch=ssel.value; distPage=0; clearTimeout(ssel._t); ssel._t=setTimeout(loadDistTable,300); }); }
     var fsel=document.getElementById('distfilter'); if(fsel){ fsel.value=distFilter; fsel.addEventListener('change',function(){ distFilter=fsel.value; distPage=0; loadDistTable(); }); }
