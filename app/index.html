@@ -1017,7 +1017,7 @@ function loadDistributors(){
         alternatephone:(document.getElementById('adalt').value||'').trim(), email:(document.getElementById('ademail').value||'').trim(),
         city:(document.getElementById('adcity').value||'').trim(), province:(document.getElementById('adprov').value||'').trim() };
       ab.disabled=true; ab.textContent='Creating…';
-      sb.functions.invoke('admin-add-distributer', { body: body }).then(function(res){
+      sb.functions.invoke('admin-add-distributor', { body: body }).then(function(res){
         ab.disabled=false; ab.textContent='Create distributor';
         if(res.error){ dm.innerHTML='<div class="msg err">Add-distributor service not available yet — deploy the Edge Function <code>admin-add-distributer</code>. ('+esc(res.error.message||'')+')</div>'; return; }
         if(res.data && res.data.error){ dm.innerHTML='<div class="msg err">Could not add: '+esc(res.data.error)+'</div>'; return; }
