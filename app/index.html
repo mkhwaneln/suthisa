@@ -605,10 +605,10 @@ function viewMyOrders(){
       var box=document.getElementById('mo');
       if(r.error){ box.innerHTML='<div class="msg err">'+esc(r.error.message)+'</div>'; return; }
       var os=r.data||[]; if(!os.length){ box.innerHTML='<div class="msg">No orders yet.</div>'; return; }
-      box.innerHTML='<div class="tablewrap"><table><thead><tr><th>Order</th><th>Date</th><th>Total</th><th>Payment</th><th>Status</th></tr></thead><tbody>'
-        +os.map(function(o){return '<tr data-open="'+o.id+'" style="cursor:pointer"><td>'+esc(o.order_number)+'</td><td>'+esc((o.placed_at||'').slice(0,10))+'</td><td>'+zar(o.total_cents)+'</td><td>'+esc(o.payment_method)+' · '+esc(o.payment_status)+'</td><td><span class="pill">'+esc(o.status)+'</span></td></tr>';}).join('')
+      box.innerHTML='<div class="tablewrap"><table><thead><tr><th>Order</th><th>Date</th><th>Total</th><th>Payment</th><th>Status</th><th></th></tr></thead><tbody>'
+        +os.map(function(o){return '<tr data-open="'+o.id+'" style="cursor:pointer"><td>'+esc(o.order_number)+'</td><td>'+esc((o.placed_at||'').slice(0,10))+'</td><td>'+zar(o.total_cents)+'</td><td>'+esc(o.payment_method)+' · '+esc(o.payment_status)+'</td><td><span class="pill">'+esc(o.status)+'</span></td><td class="actions"><button class="btn btn-sm btn-ghost" data-vieworder="'+o.id+'">View</button></td></tr>';}).join('')
         +'</tbody></table></div>';
-      box.addEventListener('click', function(ev){ var t=ev.target.closest('[data-open]'); if(t){ go('#/confirm/'+t.getAttribute('data-open')); } });
+      box.addEventListener('click', function(ev){ var vo=ev.target.closest && ev.target.closest('[data-vieworder]'); if(vo){ showOrderModal(vo.getAttribute('data-vieworder')); return; } var t=ev.target.closest('[data-open]'); if(t){ go('#/confirm/'+t.getAttribute('data-open')); } });
     });
 }
 var ORDER_STATUSES=['pending','confirmed','preparing','ready','out_for_delivery','completed','cancelled','refunded'];
