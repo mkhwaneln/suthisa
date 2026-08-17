@@ -660,12 +660,12 @@ function showOrderModal(orderId){
       var o=r.data, d=o.distributors||{};
       box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div class="h1" style="margin:0">Order '+esc(o.order_number)+'</div><button class="btn btn-ghost btn-sm" data-close>✕</button></div>'
         +'<p class="sub">Placed '+esc(String(o.placed_at||'').slice(0,16).replace('T',' '))+' · <span class="pill">'+esc(o.status)+'</span></p>'
-        +'<div class="card" style="margin-top:0"><b>Distributor</b>'
+        +(me.role==='admin'?'<div class="card" style="margin-top:0"><b>Distributor</b>'
           +'<div class="sumrow"><span class="muted">Name</span><b>'+esc(((d.name||'')+' '+(d.surname||'')).trim())+'</b></div>'
           +'<div class="sumrow"><span class="muted">Login</span><b>'+esc(d.login_name||'')+'</b></div>'
           +'<div class="sumrow"><span class="muted">Phone</span><b>'+esc(d.phone||'')+(d.alternatephone?' / '+esc(d.alternatephone):'')+'</b></div>'
           +'<div class="sumrow"><span class="muted">Email</span><b>'+esc(d.email||'—')+'</b></div>'
-        +'</div>'
+        +'</div>':'')
         +'<div class="card" style="margin-top:10px"><b>Fulfilment</b>'
           +'<div class="sumrow"><span class="muted">Method</span><b>'+esc(o.fulfillment_type||'')+'</b></div>'
           +(o.fulfillment_type==='delivery'
