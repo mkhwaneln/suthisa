@@ -737,25 +737,37 @@ function viewAdminDeals(){
   shell('<div class="h1">Package deals</div><p class="sub">Add, edit or remove bulk deals shown to distributors &amp; guests. Changes save automatically.</p><div id="adeals" class="muted">Loading…</div>', 'admindeals');
   Promise.all([
     sb.from('deals').select('*').order('sort_order').order('title'),
-    sb.from('deal_requests').select('id,deal_title,status,created_at,distributors(name,surname)').order('created_at',{ascending:false})
+    sb.from('deal_requests').select('id,deal_title,status,created_at,distributors(name,surname)').order('created_at',{ascending:false}),
+    sb.from('product_variants').select('size_kg')
   ]).then(function(res){
     var box=document.getElementById('adeals');
     var dr=res[0], rr=res[1];
     if(dr.error){ box.innerHTML='<div class="msg err">Could not load deals: '+esc(dr.error.message)+'</div>'; return; }
     var deals=dr.data||[], reqs=(rr&&rr.data)||[];
+    var sizeRows=(res[2]&&res[2].data)||[], sizeSet={};
+    sizeRows.forEach(function(x){ if(x.size_kg!=null) sizeSet[x.size_kg]=true; });
+    var allSizes=Object.keys(sizeSet).map(Number).sort(function(a,b){return a-b;});
     var dealsHtml=deals.map(function(d){
-      return '<div class="card" style="margin-bottom:14px">'
+      var sel=(d.allowed_sizes||[]).map(Number);
+      var sizesHtml=allSizes.length
+        ? '<div style="margin-bottom:6px">'+allSizes.map(function(s){ return '<label class="muted" style="white-space:nowrap;margin-right:14px"><input type="checkbox" data-dsize data-id="'+d.id+'" data-kg="'+s+'"'+(sel.indexOf(s)>-1?' checked':'')+' style="width:auto"> '+s+' kg</label>'; }).join('')+'</div>'
+        : '<div class="muted" style="margin-bottom:6px">No sizes in the catalogue yet — add sizes in Products &amp; stock.</div>';
+      return '<details class="card" style="margin-bottom:14px">'
+        +'<summary style="cursor:pointer;font-weight:700">'+esc(d.title)+' <span class="muted" style="font-weight:400">· '+(d.is_active?'active':'draft')+(d.target_kg!=null?' · '+esc(String(d.target_kg))+' kg':' · no target')+'</span></summary>'
+        +'<div style="margin-top:10px">'
         +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
           +'<input type="text" data-df="title" data-id="'+d.id+'" value="'+esc(d.title)+'" style="font-weight:700;max-width:260px" placeholder="Deal title">'
           +'<label class="muted" style="white-space:nowrap"><input type="checkbox" data-active data-id="'+d.id+'"'+(d.is_active?' checked':'')+' style="width:auto"> active</label>'
           +'<div style="flex:1"></div>'
           +'<button class="btn btn-ghost btn-sm" data-deldeal="'+d.id+'" style="border-color:var(--red);color:var(--red)">Delete</button>'
         +'</div>'
-        +'<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px"><label>Price</label><input type="text" data-df="price_text" data-id="'+d.id+'" value="'+esc(d.price_text||'')+'" placeholder="R 60 000"></div><div style="flex:1;min-width:140px"><label>Total</label><input type="text" data-df="total_text" data-id="'+d.id+'" value="'+esc(d.total_text||'')+'" placeholder="8 500 kg total"></div></div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:120px"><label>Price</label><input type="text" data-df="price_text" data-id="'+d.id+'" value="'+esc(d.price_text||'')+'" placeholder="R 60 000"></div><div style="flex:1;min-width:120px"><label>Total</label><input type="text" data-df="total_text" data-id="'+d.id+'" value="'+esc(d.total_text||'')+'" placeholder="8 500 kg total"></div><div style="flex:1;min-width:120px"><label>Target (kg)</label><input type="number" min="0" step="0.5" data-dfnum="target_kg" data-id="'+d.id+'" value="'+(d.target_kg==null?'':esc(String(d.target_kg)))+'" placeholder="8500"></div></div>'
+        +'<label>Included bag sizes</label>'+sizesHtml
         +'<label>Subtitle</label><input type="text" data-df="subtitle" data-id="'+d.id+'" value="'+esc(d.subtitle||'')+'">'
         +'<label>Description</label><textarea data-df="description" data-id="'+d.id+'" style="width:100%;min-height:96px;font-family:inherit;font-size:15px;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px">'+esc(d.description||'')+'</textarea>'
         +'<label>Example combination <span class="muted">(one item per line)</span></label><textarea data-df="example" data-id="'+d.id+'" style="width:100%;min-height:96px;font-family:inherit;font-size:15px;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px">'+esc(d.example||'')+'</textarea>'
-      +'</div>';
+        +'</div>'
+      +'</details>';
     }).join('');
     var reqRows=reqs.map(function(q){
       var who=q.distributors?esc(((q.distributors.name||'')+' '+(q.distributors.surname||'')).trim()):'';
@@ -775,6 +787,22 @@ function viewAdminDeals(){
         if(f==='title' && !(v||'').trim()){ amsg('<div class="msg err">Title cannot be empty.</div>'); viewAdminDeals(); return; }
         var patch={}; patch[f]=(f==='title'? v.trim() : ((v||'').trim()||null)); el.disabled=true;
         sb.from('deals').update(patch).eq('id', el.getAttribute('data-id')).then(function(r2){ el.disabled=false; dealsCache=null; amsg(r2.error?'<div class="msg err">Save failed: '+esc(r2.error.message)+'</div>':'<div class="msg ok">Saved ✓</div>'); });
+        return;
+      }
+      if(el.getAttribute && el.getAttribute('data-dfnum')){
+        var fn=el.getAttribute('data-dfnum'), raw=(el.value||'').trim();
+        var num=raw===''?null:parseFloat(raw);
+        if(raw!=='' && (isNaN(num)||num<0)){ amsg('<div class="msg err">Enter a valid number.</div>'); return; }
+        var pn={}; pn[fn]=num; el.disabled=true;
+        sb.from('deals').update(pn).eq('id', el.getAttribute('data-id')).then(function(r2){ el.disabled=false; dealsCache=null; amsg(r2.error?'<div class="msg err">Save failed: '+esc(r2.error.message)+'</div>':'<div class="msg ok">Saved ✓</div>'); });
+        return;
+      }
+      if(el.hasAttribute && el.hasAttribute('data-dsize')){
+        var did=el.getAttribute('data-id');
+        var boxes=box.querySelectorAll('[data-dsize][data-id="'+did+'"]'), arr=[];
+        for(var i=0;i<boxes.length;i++){ if(boxes[i].checked) arr.push(parseFloat(boxes[i].getAttribute('data-kg'))); }
+        arr.sort(function(a,b){return a-b;});
+        sb.from('deals').update({allowed_sizes:arr}).eq('id', did).then(function(r2){ dealsCache=null; amsg(r2.error?'<div class="msg err">Save failed: '+esc(r2.error.message)+'</div>':'<div class="msg ok">Saved ✓</div>'); });
         return;
       }
       if(el.hasAttribute && el.hasAttribute('data-active')){
