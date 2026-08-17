@@ -509,12 +509,13 @@ function viewCheckout(){
         +'<label>Phone</label><input name="phone" value="'+esc(myDistributor.phone||'')+'">'
       +'</div>'
       +'<div class="card" style="margin-top:12px"><b>How would you like to receive it?</b>'
-        +'<label class="radio"><span>🚚 <b>Delivery</b> — to your address <span class="muted">('+zar(settingsCache.default_delivery_fee_cents||0)+')</span></span><input type="radio" name="ff" value="delivery"'+(f==='delivery'?' checked':'')+'></label>'
+        +'<label class="radio"><span>🚚 <b>Delivery</b> — to your address</span><input type="radio" name="ff" value="delivery"'+(f==='delivery'?' checked':'')+'></label>'
+        +'<div class="muted" style="margin:-2px 4px 10px">Delivery fee: <b>'+zar(settingsCache.default_delivery_fee_cents||0)+'</b></div>'
         +'<label class="radio"><span>🏬 <b>Collection</b> — pick up at a depot <span class="muted">(free)</span></span><input type="radio" name="ff" value="collection"'+(f==='collection'?' checked':'')+'></label>'
         +(f==='delivery'?'<label>Delivery address</label><textarea name="address" rows="4" placeholder="Street, suburb, city, postal code">'+esc(addr)+'</textarea>':'<label>Collect from</label><select name="depot">'+depotOpts+'</select><div id="depinfo" class="msg" style="text-align:left;margin-top:8px"></div>')
       +'</div>'
       +'<div class="card" style="margin-top:12px"><b>Payment</b>'
-        +'<label class="radio"><span>💵 <b>Cash</b> — pay on '+(f==='collection'?'collection':'delivery')+'</span><input type="radio" name="pay" value="cash"'+(pay==='cash'?' checked':'')+'></label>'
+        +'<label class="radio"><span>💵 <b>Cash</b> — pay on collection/delivery</span><input type="radio" name="pay" value="cash"'+(pay==='cash'?' checked':'')+'></label>'
         +'<label class="radio"><span>🏦 <b>Manual EFT</b> — bank transfer, upload proof</span><input type="radio" name="pay" value="eft"'+(pay==='eft'?' checked':'')+'></label>'
         +(pay==='eft'?(hasBank?'<div class="msg" style="text-align:left"><div style="font-weight:600;margin-bottom:6px">Pay by EFT to:</div><div class="sumrow"><span class="muted">Account name</span><b>'+esc(s.account_name||'—')+'</b></div><div class="sumrow"><span class="muted">Account number</span><b>'+esc(s.account_number||'—')+'</b></div><div class="sumrow"><span class="muted">Bank</span><b>'+esc(s.bank_name||'—')+'</b></div><div class="sumrow"><span class="muted">Branch</span><b>'+esc(s.branch_code||'—')+'</b></div><div class="sumrow"><span class="muted">Reference</span><b>your order number</b></div></div>':'<div class="msg amber">Bank details not yet configured — you can still order; we\'ll send details.</div>'):'')
       +'</div></form>'
