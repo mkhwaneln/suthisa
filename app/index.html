@@ -126,6 +126,7 @@ function renderRoute(){
     if(r.view==='admin' && r.id==='orders'){ return viewAdminOrders(); }
     if(r.view==='admin' && r.id==='depots'){ return viewAdminDepots(); }
     if(r.view==='admin' && r.id==='settings'){ return viewAdminSettings(); }
+    if(r.view==='admin' && r.id==='deals'){ return viewAdminDeals(); }
     if(r.view==='distributors'){ return loadDistributors(); }
     return loadCatalogue(); // default admin view (Products & stock)
   }
@@ -206,7 +207,8 @@ function shell(inner, view){
       +'<button class="tab'+(view==='distributors'?' active':'')+'" data-nav="#/distributors">Distributors</button>'
       +'<button class="tab'+(view==='adminorders'?' active':'')+'" data-nav="#/admin/orders">Orders</button>'
       +'<button class="tab'+(view==='admindepots'?' active':'')+'" data-nav="#/admin/depots">Depots</button>'
-      +'<button class="tab'+(view==='adminsettings'?' active':'')+'" data-nav="#/admin/settings">Settings</button></div>';
+      +'<button class="tab'+(view==='adminsettings'?' active':'')+'" data-nav="#/admin/settings">Settings</button>'
+      +'<button class="tab'+(view==='admindeals'?' active':'')+'" data-nav="#/admin/deals">Deals</button></div>';
   } else if(me.role==='distributor' && distributorApproved){
     nav='<div class="nav">'
       +'<button class="tab'+(view==='shop'?' active':'')+'" data-nav="#/shop">Shop</button>'
@@ -338,31 +340,50 @@ function loadCatalogueData(cb){
       catalogueCache=r.data||[]; cb(catalogueCache);
     });
 }
-function dealBanner(){
+var dealsCache=null;
+function loadDeals(cb){
+  if(dealsCache){ return cb(dealsCache); }
+  sb.from('deals').select('id,title,subtitle,price_text,total_text,description,is_active,sort_order').order('sort_order').order('title')
+    .then(function(r){ dealsCache = r.error ? [] : (r.data||[]); cb(dealsCache); });
+}
+function dealBanner(deal){
+  if(!deal) return '';
   return '<div class="card" data-open-deal="1" style="cursor:pointer;border:2px solid var(--yellow);background:#fffde7;display:flex;align-items:center;gap:12px;margin-bottom:14px">'
     +'<div style="font-size:32px">🚛</div>'
-    +'<div style="flex:1"><b>8.5 Ton Package Deal — R 60 000</b><div class="muted">Bulk Maize Meal, packed your way (10–80 kg bags). Tap to view.</div></div>'
-    +'<span class="btn btn-sm" style="background:var(--yellow);color:var(--green-dark)">View deal</span></div>';
+    +'<div style="flex:1"><b>'+esc(deal.title)+(deal.price_text?' — '+esc(deal.price_text):'')+'</b><div class="muted">'+esc(deal.subtitle||'Tap to view our package deals.')+'</div></div>'
+    +'<span class="btn btn-sm" style="background:var(--yellow);color:var(--green-dark)">View deals</span></div>';
 }
 function viewDeals(){
   shell('<button class="btn btn-ghost btn-sm" data-nav="#/shop">‹ Back to shop</button>'
-    +'<div class="h1" style="margin-top:8px">8.5 Ton Package Deal</div><p class="sub">Save on volume — packed to suit your business</p>'
-    +'<div class="card" style="border:2px solid var(--yellow)">'
-      +'<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="font-size:42px">🚛</div>'
-        +'<div><div class="pcat">Maize Meal</div><div style="font-size:20px;font-weight:800;color:var(--green-dark)">8.5 Ton Package Deal</div></div>'
-        +'<div style="flex:1"></div><div style="text-align:right"><div class="pprice">R 60 000</div><div class="muted">8 500 kg total</div></div></div>'
-      +'<hr style="border:none;border-top:1px solid var(--line);margin:14px 0">'
-      +'<p>Order <b>8.5 tons (8 500 kg)</b> of Maize Meal, packed <b>your way</b> — any combination of <b>10, 12.5, 25, 50 and 80 kg</b> bags.</p>'
-      +'<div class="msg"><b>Example combination</b><br>• 2 000 kg in 10 kg bags<br>• 2 500 kg in 25 kg bags<br>• 4 000 kg in 50 kg bags<br><span class="muted">…or any mix totalling 8 500 kg.</span></div>'
-      +'<div class="tablewrap"><table style="min-width:0"><tbody>'
-        +'<tr><td>Package</td><td><b>8.5 Ton Maize Meal Package Deal</b></td></tr>'
-        +'<tr><td>Price</td><td><b>R 60 000</b></td></tr>'
-        +'<tr><td>Total product</td><td>8.5 tons (8 500 kg)</td></tr>'
-        +'<tr><td>Packaging</td><td>Customised to your preferred bag-size combination</td></tr>'
-      +'</tbody></table></div>'
-      +'<p class="muted" style="text-align:center;margin-top:10px">A Suthisa representative will confirm your packaging and current price. Price is subject to the prevailing market price of maize.</p>'
-    +'</div>', 'deals');
-  wireNav();
+    +'<div class="h1" style="margin-top:8px">Package deals</div><p class="sub">Bulk offers — save on volume, packed to suit your business</p>'
+    +'<div id="deals" class="muted">Loading…</div>', 'deals');
+  loadDeals(function(deals){
+    var box=document.getElementById('deals');
+    var active=(deals||[]).filter(function(d){return d.is_active;});
+    if(!active.length){ box.innerHTML='<div class="msg">No package deals available right now.</div>'; wireNav(); return; }
+    box.innerHTML=active.map(function(d){
+      return '<div class="card" style="border:2px solid var(--yellow);margin-bottom:14px">'
+        +'<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="font-size:42px">🚛</div>'
+          +'<div><div class="pcat">Package deal</div><div style="font-size:20px;font-weight:800;color:var(--green-dark)">'+esc(d.title)+'</div></div>'
+          +'<div style="flex:1"></div><div style="text-align:right"><div class="pprice">'+esc(d.price_text||'')+'</div><div class="muted">'+esc(d.total_text||'')+'</div></div></div>'
+        +(d.subtitle?'<p class="sub" style="margin-top:8px">'+esc(d.subtitle)+'</p>':'')
+        +(d.description?'<div class="msg">'+esc(d.description).replace(/\n/g,'<br>')+'</div>':'')
+        +(me.user
+            ? '<button class="btn btn-block" data-reqdeal="'+d.id+'" style="margin-top:8px">Request this package</button>'
+            : '<button class="btn btn-block" data-nav="#/login" style="margin-top:8px">Sign in to request</button>')
+      +'</div>';
+    }).join('')+'<div id="dealmsg"></div>';
+    box.addEventListener('click', function(ev){
+      var n=ev.target.closest && ev.target.closest('[data-nav]'); if(n){ go(n.getAttribute('data-nav')); return; }
+      var rq=ev.target.closest && ev.target.closest('[data-reqdeal]'); if(!rq) return;
+      rq.disabled=true; rq.textContent='Sending…';
+      sb.rpc('request_deal', { p_deal_id: rq.getAttribute('data-reqdeal') }).then(function(rr){
+        if(rr.error){ rq.disabled=false; rq.textContent='Request this package'; document.getElementById('dealmsg').innerHTML='<div class="msg err">Could not send request: '+esc(rr.error.message)+'</div>'; return; }
+        rq.outerHTML='<div class="msg ok">✅ Request sent — a Suthisa representative will be in touch.</div>';
+      });
+    });
+    wireNav();
+  });
 }
 function viewShop(){
   shell('<div class="h1">Order maize meal</div><p class="sub">Fresh from the mill · delivered or collected · pay by cash or EFT</p><div id="shop" class="muted">Loading…</div>','shop');
@@ -380,10 +401,13 @@ function viewShop(){
             +'<button class="btn btn-sm btn-block" data-open="'+p.id+'" style="margin-top:8px">View sizes</button></div>';
         }).join('')+'</div>'
       : '<div class="msg">No products yet.</div>';
-    box.innerHTML=dealBanner()+grid;
-    box.addEventListener('click', function(ev){
-      var d=ev.target.closest && ev.target.closest('[data-open-deal]'); if(d){ go('#/deals'); return; }
-      var el=ev.target.closest('[data-open]'); if(el){ go('#/product/'+el.getAttribute('data-open')); }
+    loadDeals(function(deals){
+      var activeDeal=(deals||[]).filter(function(x){return x.is_active;})[0];
+      box.innerHTML=dealBanner(activeDeal)+grid;
+      box.addEventListener('click', function(ev){
+        var d=ev.target.closest && ev.target.closest('[data-open-deal]'); if(d){ go('#/deals'); return; }
+        var el=ev.target.closest('[data-open]'); if(el){ go('#/product/'+el.getAttribute('data-open')); }
+      });
     });
   });
 }
@@ -623,6 +647,66 @@ function viewAdminSettings(){
         settingsCache=null; // so checkout re-fetches the new bank details / delivery fee
         if(!rr.error) setTimeout(function(){ if(m) m.innerHTML=''; }, 2500);
       });
+    });
+  });
+}
+
+/* ---------- deals (admin) ---------- */
+function viewAdminDeals(){
+  shell('<div class="h1">Package deals</div><p class="sub">Add, edit or remove bulk deals shown to distributors &amp; guests. Changes save automatically.</p><div id="adeals" class="muted">Loading…</div>', 'admindeals');
+  Promise.all([
+    sb.from('deals').select('id,title,subtitle,price_text,total_text,description,is_active,sort_order').order('sort_order').order('title'),
+    sb.from('deal_requests').select('id,deal_title,status,created_at,distributors(name,surname)').order('created_at',{ascending:false})
+  ]).then(function(res){
+    var box=document.getElementById('adeals');
+    var dr=res[0], rr=res[1];
+    if(dr.error){ box.innerHTML='<div class="msg err">Could not load deals: '+esc(dr.error.message)+'</div>'; return; }
+    var deals=dr.data||[], reqs=(rr&&rr.data)||[];
+    var dealsHtml=deals.map(function(d){
+      return '<div class="card" style="margin-bottom:14px">'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+          +'<input type="text" data-df="title" data-id="'+d.id+'" value="'+esc(d.title)+'" style="font-weight:700;max-width:260px" placeholder="Deal title">'
+          +'<label class="muted" style="white-space:nowrap"><input type="checkbox" data-active data-id="'+d.id+'"'+(d.is_active?' checked':'')+' style="width:auto"> active</label>'
+          +'<div style="flex:1"></div>'
+          +'<button class="btn btn-ghost btn-sm" data-deldeal="'+d.id+'" style="border-color:var(--red);color:var(--red)">Delete</button>'
+        +'</div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px"><label>Price</label><input type="text" data-df="price_text" data-id="'+d.id+'" value="'+esc(d.price_text||'')+'" placeholder="R 60 000"></div><div style="flex:1;min-width:140px"><label>Total</label><input type="text" data-df="total_text" data-id="'+d.id+'" value="'+esc(d.total_text||'')+'" placeholder="8 500 kg total"></div></div>'
+        +'<label>Subtitle</label><input type="text" data-df="subtitle" data-id="'+d.id+'" value="'+esc(d.subtitle||'')+'">'
+        +'<label>Description</label><textarea data-df="description" data-id="'+d.id+'" style="width:100%;min-height:96px;font-family:inherit;font-size:15px;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px">'+esc(d.description||'')+'</textarea>'
+      +'</div>';
+    }).join('');
+    var reqRows=reqs.map(function(q){
+      var who=q.distributors?esc(((q.distributors.name||'')+' '+(q.distributors.surname||'')).trim()):'';
+      var act=q.status==='pending'?'<button class="btn btn-sm" data-reqact="approve" data-id="'+q.id+'">Approve</button> <button class="btn btn-ghost btn-sm" data-reqact="decline" data-id="'+q.id+'">Decline</button>':'—';
+      return '<tr><td>'+esc(q.deal_title||'')+'</td><td>'+who+'</td><td>'+esc((q.created_at||'').slice(0,10))+'</td><td>'+distStatusPill(q.status)+'</td><td>'+act+'</td></tr>';
+    }).join('')||'<tr><td colspan="5" class="muted">No requests yet.</td></tr>';
+    box.innerHTML=dealsHtml
+      +'<div class="card" style="max-width:560px"><b>Add a deal</b><label>Title</label><input type="text" id="ndtitle" placeholder="e.g. 5 Ton Starter Deal"><label>Price</label><input type="text" id="ndprice" placeholder="R 40 000"><button class="btn" id="ndadd" style="margin-top:10px">Add deal</button></div>'
+      +'<div class="h1" style="font-size:18px;margin-top:20px">Requests</div>'
+      +'<div class="tablewrap"><table><thead><tr><th>Deal</th><th>Distributor</th><th>Date</th><th>Status</th><th>Action</th></tr></thead><tbody>'+reqRows+'</tbody></table></div>'
+      +'<div id="admsg"></div>';
+    function amsg(html){ var m=document.getElementById('admsg'); if(!m) return; m.innerHTML=html; if(html) setTimeout(function(){ if(m) m.innerHTML=''; }, 2500); }
+    box.addEventListener('change', function(ev){
+      var el=ev.target;
+      if(el.getAttribute && el.getAttribute('data-df')){
+        var f=el.getAttribute('data-df'), v=el.value;
+        if(f==='title' && !(v||'').trim()){ amsg('<div class="msg err">Title cannot be empty.</div>'); viewAdminDeals(); return; }
+        var patch={}; patch[f]=(f==='title'? v.trim() : ((v||'').trim()||null)); el.disabled=true;
+        sb.from('deals').update(patch).eq('id', el.getAttribute('data-id')).then(function(r2){ el.disabled=false; dealsCache=null; amsg(r2.error?'<div class="msg err">Save failed: '+esc(r2.error.message)+'</div>':'<div class="msg ok">Saved ✓</div>'); });
+        return;
+      }
+      if(el.hasAttribute && el.hasAttribute('data-active')){
+        el.disabled=true;
+        sb.from('deals').update({is_active:el.checked}).eq('id', el.getAttribute('data-id')).then(function(r2){ el.disabled=false; dealsCache=null; amsg(r2.error?'<div class="msg err">Save failed: '+esc(r2.error.message)+'</div>':'<div class="msg ok">Saved ✓</div>'); });
+        return;
+      }
+    });
+    box.addEventListener('click', function(ev){
+      var del=ev.target.closest && ev.target.closest('[data-deldeal]');
+      if(del){ if(!confirm('Delete this deal?')) return; sb.from('deals').delete().eq('id', del.getAttribute('data-deldeal')).then(function(r2){ if(r2.error){ amsg('<div class="msg err">Delete failed: '+esc(r2.error.message)+'</div>'); return; } dealsCache=null; viewAdminDeals(); }); return; }
+      var ra=ev.target.closest && ev.target.closest('[data-reqact]');
+      if(ra){ var st=ra.getAttribute('data-reqact')==='approve'?'approved':'declined'; sb.from('deal_requests').update({status:st}).eq('id', ra.getAttribute('data-id')).then(function(r2){ if(r2.error){ amsg('<div class="msg err">Update failed: '+esc(r2.error.message)+'</div>'); return; } viewAdminDeals(); }); return; }
+      if(ev.target.id==='ndadd'){ var t=(document.getElementById('ndtitle').value||'').trim(), p=(document.getElementById('ndprice').value||'').trim(); if(!t){ amsg('<div class="msg err">Title is required.</div>'); return; } ev.target.disabled=true; sb.from('deals').insert({title:t, price_text:p||null, is_active:true}).then(function(r2){ ev.target.disabled=false; if(r2.error){ amsg('<div class="msg err">Add failed: '+esc(r2.error.message)+'</div>'); return; } dealsCache=null; viewAdminDeals(); }); return; }
     });
   });
 }
