@@ -351,7 +351,7 @@ function loadCatalogueData(cb){
 var dealsCache=null;
 function loadDeals(cb){
   if(dealsCache){ return cb(dealsCache); }
-  sb.from('deals').select('id,title,subtitle,price_text,total_text,description,example,is_active,sort_order').order('sort_order').order('title')
+  sb.from('deals').select('*').order('sort_order').order('title')
     .then(function(r){ dealsCache = r.error ? [] : (r.data||[]); cb(dealsCache); });
 }
 function dealBanner(deal){
@@ -683,7 +683,7 @@ function viewAdminSettings(){
 function viewAdminDeals(){
   shell('<div class="h1">Package deals</div><p class="sub">Add, edit or remove bulk deals shown to distributors &amp; guests. Changes save automatically.</p><div id="adeals" class="muted">Loading…</div>', 'admindeals');
   Promise.all([
-    sb.from('deals').select('id,title,subtitle,price_text,total_text,description,example,is_active,sort_order').order('sort_order').order('title'),
+    sb.from('deals').select('*').order('sort_order').order('title'),
     sb.from('deal_requests').select('id,deal_title,status,created_at,distributors(name,surname)').order('created_at',{ascending:false})
   ]).then(function(res){
     var box=document.getElementById('adeals');
