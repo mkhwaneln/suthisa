@@ -19,6 +19,9 @@ label{display:block;font-size:13px;font-weight:600;margin:10px 0 4px}
 input{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;font-family:inherit}
 td input{width:96px;padding:6px 8px;font-size:14px}
 td input.stock{width:70px}
+select,textarea{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;font-family:inherit;background:#fff;color:var(--ink)}
+textarea{min-height:118px;line-height:1.5;resize:vertical}
+td select{width:auto;padding:6px 8px;font-size:14px}
 .btn{border:0;border-radius:10px;padding:11px 16px;font-weight:700;font-size:15px;background:var(--green);color:#fff;cursor:pointer}
 .btn:hover{background:var(--green-dark)}.btn:disabled{opacity:.6;cursor:not-allowed}
 .btn-block{display:block;width:100%}
@@ -52,7 +55,8 @@ tbody tr:nth-child(even){background:#f7faf8}
 .pcat{font-size:12px;color:var(--muted)}
 .pprice{font-size:18px;font-weight:800;color:var(--green-dark)}
 .psize{font-size:12px;color:var(--muted)}
-.radio{display:flex;gap:10px;align-items:flex-start;border:1.5px solid var(--line);border-radius:12px;padding:12px;margin:8px 0;cursor:pointer}
+.radio{display:flex;justify-content:space-between;align-items:center;gap:12px;border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;margin:8px 0;cursor:pointer;white-space:nowrap}
+.radio>span{overflow:hidden;text-overflow:ellipsis}.radio input{flex:none}
 .radio.sel{border-color:var(--green);background:var(--green-soft)}
 .radio input{margin-top:3px}
 .radio .t{font-weight:700}
@@ -498,14 +502,14 @@ function viewCheckout(){
         +'<label>Phone</label><input name="phone" value="'+esc(myDistributor.phone||'')+'">'
       +'</div>'
       +'<div class="card" style="margin-top:12px"><b>How would you like to receive it?</b>'
-        +'<label class="radio"><input type="radio" name="ff" value="delivery"'+(f==='delivery'?' checked':'')+'> 🚚 Delivery · '+zar(settingsCache.default_delivery_fee_cents||0)+'</label>'
-        +'<label class="radio"><input type="radio" name="ff" value="collection"'+(f==='collection'?' checked':'')+'> 🏬 Collection · free</label>'
-        +(f==='delivery'?'<label>Delivery address</label><textarea name="address">'+esc(addr)+'</textarea>':'<label>Collect from</label><select name="depot">'+depotOpts+'</select>')
+        +'<label class="radio"><span>🚚 <b>Delivery</b> — to your address <span class="muted">('+zar(settingsCache.default_delivery_fee_cents||0)+')</span></span><input type="radio" name="ff" value="delivery"'+(f==='delivery'?' checked':'')+'></label>'
+        +'<label class="radio"><span>🏬 <b>Collection</b> — pick up at a depot <span class="muted">(free)</span></span><input type="radio" name="ff" value="collection"'+(f==='collection'?' checked':'')+'></label>'
+        +(f==='delivery'?'<label>Delivery address</label><textarea name="address" rows="4" placeholder="Street, suburb, city, postal code">'+esc(addr)+'</textarea>':'<label>Collect from</label><select name="depot">'+depotOpts+'</select>')
       +'</div>'
       +'<div class="card" style="margin-top:12px"><b>Payment</b>'
-        +'<label class="radio"><input type="radio" name="pay" value="cash"'+(pay==='cash'?' checked':'')+'> 💵 Cash on '+(f==='collection'?'collection':'delivery')+'</label>'
-        +'<label class="radio"><input type="radio" name="pay" value="eft"'+(pay==='eft'?' checked':'')+'> 🏦 Manual EFT (upload proof after)</label>'
-        +(pay==='eft'?(hasBank?'<div class="msg"><b>'+esc(s.bank_name)+'</b> · Acc '+esc(s.account_name||'')+' '+esc(s.account_number||'')+' · Branch '+esc(s.branch_code||'')+' · Reference: your order number</div>':'<div class="msg amber">Bank details not yet configured — you can still order; we\'ll send details.</div>'):'')
+        +'<label class="radio"><span>💵 <b>Cash</b> — pay on '+(f==='collection'?'collection':'delivery')+'</span><input type="radio" name="pay" value="cash"'+(pay==='cash'?' checked':'')+'></label>'
+        +'<label class="radio"><span>🏦 <b>Manual EFT</b> — bank transfer, upload proof</span><input type="radio" name="pay" value="eft"'+(pay==='eft'?' checked':'')+'></label>'
+        +(pay==='eft'?(hasBank?'<div class="msg" style="text-align:left"><div style="font-weight:600;margin-bottom:6px">Pay by EFT to:</div><div class="sumrow"><span class="muted">Account name</span><b>'+esc(s.account_name||'—')+'</b></div><div class="sumrow"><span class="muted">Account number</span><b>'+esc(s.account_number||'—')+'</b></div><div class="sumrow"><span class="muted">Bank</span><b>'+esc(s.bank_name||'—')+'</b></div><div class="sumrow"><span class="muted">Branch</span><b>'+esc(s.branch_code||'—')+'</b></div><div class="sumrow"><span class="muted">Reference</span><b>your order number</b></div></div>':'<div class="msg amber">Bank details not yet configured — you can still order; we\'ll send details.</div>'):'')
       +'</div></form>'
       +'<div class="card" style="margin-top:12px"><b>Summary</b>'
         +cart.map(function(l){return '<div class="sumrow"><span>'+esc(l.product_name)+' '+l.size_kg+'kg × '+l.qty+'</span><b>'+zar(l.unit_price_cents*l.qty)+'</b></div>';}).join('')
