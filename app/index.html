@@ -359,6 +359,40 @@ function loadDeals(cb){
   sb.from('deals').select('*').order('sort_order').order('title')
     .then(function(r){ dealsCache = r.error ? [] : (r.data||[]); cb(dealsCache); });
 }
+function kgFmt(n){ n=Number(n)||0; var s=(Math.round(n*100)/100).toString().split('.'); s[0]=s[0].replace(/\B(?=(\d{3})+(?!\d))/g,' '); return s.join('.'); }
+function dealBuildable(d){ return d && d.target_kg!=null && (d.allowed_sizes||[]).length>0; }
+function dealBuilderHtml(d){
+  var sizes=(d.allowed_sizes||[]).map(Number).sort(function(a,b){return a-b;});
+  var tgt=Number(d.target_kg);
+  var rows=sizes.map(function(s){
+    return '<div class="sumrow"><span>'+kgFmt(s)+' kg &nbsp;×&nbsp; <input type="number" min="0" step="1" value="0" data-qty data-deal="'+d.id+'" data-kg="'+s+'" style="width:76px;display:inline-block"></span><span data-sub data-deal="'+d.id+'" data-kg="'+s+'">0 kg</span></div>';
+  }).join('');
+  return '<div class="pkgbuild" data-build="'+d.id+'" style="margin-top:10px">'
+    +'<div style="font-weight:700;margin-bottom:6px">Build your package — must total '+kgFmt(tgt)+' kg</div>'
+    +rows
+    +'<div class="sumrow total"><span>Total</span><span data-total="'+d.id+'">0 / '+kgFmt(tgt)+' kg</span></div>'
+    +'<div class="muted" data-hint="'+d.id+'" style="margin-top:4px">'+kgFmt(tgt)+' kg to go.</div>'
+    +'<button class="btn btn-block" data-submitdeal="'+d.id+'" data-target="'+tgt+'" disabled style="margin-top:8px">Request this package</button>'
+  +'</div>';
+}
+function recalcBuild(dealId){
+  var root=document.querySelector('[data-build="'+dealId+'"]'); if(!root) return;
+  var qtys=root.querySelectorAll('[data-qty][data-deal="'+dealId+'"]'), total=0;
+  for(var i=0;i<qtys.length;i++){
+    var kg=parseFloat(qtys[i].getAttribute('data-kg'))||0;
+    var q=parseInt(qtys[i].value||0,10); if(isNaN(q)||q<0) q=0;
+    var line=kg*q; total+=line;
+    var sub=root.querySelector('[data-sub][data-deal="'+dealId+'"][data-kg="'+qtys[i].getAttribute('data-kg')+'"]');
+    if(sub) sub.textContent=kgFmt(line)+' kg';
+  }
+  var btn=root.querySelector('[data-submitdeal="'+dealId+'"]');
+  var tgt=Number(btn&&btn.getAttribute('data-target'))||0;
+  var totEl=root.querySelector('[data-total="'+dealId+'"]'); if(totEl) totEl.textContent=kgFmt(total)+' / '+kgFmt(tgt)+' kg';
+  var hint=root.querySelector('[data-hint="'+dealId+'"]');
+  var ok=(Math.abs(total-tgt)<0.001 && total>0);
+  if(btn) btn.disabled=!ok;
+  if(hint){ hint.textContent = ok?'Ready to submit ✓' : (total>tgt?kgFmt(total-tgt)+' kg over.':kgFmt(tgt-total)+' kg to go.'); }
+}
 function dealBanner(deal){
   if(!deal) return '';
   return '<div class="card" data-open-deal="1" style="cursor:pointer;border:2px solid var(--yellow);background:#fffde7;display:flex;align-items:center;gap:12px;margin-bottom:14px">'
@@ -384,12 +418,31 @@ function viewDeals(){
           +(d.description?'<div class="msg">'+esc(d.description).replace(/\n/g,'<br>')+'</div>':'')
           +(d.example?'<div class="msg" style="text-align:left"><b>Example combination</b>'+String(d.example).split('\n').filter(function(x){return x.trim();}).map(function(x){x=x.trim();return /^(…|\.\.\.|or\b)/i.test(x)?'<br><span class="muted">'+esc(x)+'</span>':'<br>• '+esc(x);}).join('')+'</div>':'')
           +(me.user
-              ? (pending[d.id]?'<div class="msg amber" style="margin-top:8px;text-align:center"><b>Pending — awaiting approval</b></div>':'<button class="btn btn-block" data-reqdeal="'+d.id+'" style="margin-top:8px">Request this package</button>')
+              ? (pending[d.id]
+                   ? '<div class="msg amber" style="margin-top:8px;text-align:center"><b>Pending — awaiting approval</b></div>'
+                   : (dealBuildable(d)
+                        ? dealBuilderHtml(d)
+                        : '<button class="btn btn-block" data-reqdeal="'+d.id+'" style="margin-top:8px">Request this package</button>'))
               : '<button class="btn btn-block" data-nav="#/login" style="margin-top:8px">Sign in to request</button>')
         +'</div>';
       }).join('')+'<div id="dealmsg"></div>';
+      box.addEventListener('input', function(ev){
+        var q=ev.target.closest && ev.target.closest('[data-qty]'); if(q) recalcBuild(q.getAttribute('data-deal'));
+      });
       box.addEventListener('click', function(ev){
         var n=ev.target.closest && ev.target.closest('[data-nav]'); if(n){ go(n.getAttribute('data-nav')); return; }
+        var sd=ev.target.closest && ev.target.closest('[data-submitdeal]');
+        if(sd){
+          var did=sd.getAttribute('data-submitdeal'), root=document.querySelector('[data-build="'+did+'"]');
+          var qtys=root.querySelectorAll('[data-qty][data-deal="'+did+'"]'), items=[], total=0;
+          for(var i=0;i<qtys.length;i++){ var kg=parseFloat(qtys[i].getAttribute('data-kg'))||0, q2=parseInt(qtys[i].value||0,10); if(q2>0){ items.push({size_kg:kg, qty:q2}); total+=kg*q2; } }
+          sd.disabled=true; sd.textContent='Sending…';
+          sb.rpc('request_deal', { p_deal_id: did, p_items: items, p_total_kg: total }).then(function(rr){
+            if(rr.error){ sd.disabled=false; sd.textContent='Request this package'; document.getElementById('dealmsg').innerHTML='<div class="msg err">Could not send request: '+esc(rr.error.message)+'</div>'; return; }
+            root.outerHTML='<div class="msg amber" style="margin-top:8px;text-align:center"><b>Pending — awaiting approval</b></div>';
+          });
+          return;
+        }
         var rq=ev.target.closest && ev.target.closest('[data-reqdeal]'); if(!rq) return;
         rq.disabled=true; rq.textContent='Sending…';
         sb.rpc('request_deal', { p_deal_id: rq.getAttribute('data-reqdeal') }).then(function(rr){
@@ -737,7 +790,7 @@ function viewAdminDeals(){
   shell('<div class="h1">Package deals</div><p class="sub">Add, edit or remove bulk deals shown to distributors &amp; guests. Changes save automatically.</p><div id="adeals" class="muted">Loading…</div>', 'admindeals');
   Promise.all([
     sb.from('deals').select('*').order('sort_order').order('title'),
-    sb.from('deal_requests').select('id,deal_title,status,created_at,distributors(name,surname)').order('created_at',{ascending:false}),
+    sb.from('deal_requests').select('id,deal_title,status,created_at,items,total_kg,distributors(name,surname)').order('created_at',{ascending:false}),
     sb.from('product_variants').select('size_kg')
   ]).then(function(res){
     var box=document.getElementById('adeals');
@@ -772,12 +825,15 @@ function viewAdminDeals(){
     var reqRows=reqs.map(function(q){
       var who=q.distributors?esc(((q.distributors.name||'')+' '+(q.distributors.surname||'')).trim()):'';
       var act=q.status==='pending'?'<button class="btn btn-sm" data-reqact="approve" data-id="'+q.id+'">Approve</button> <button class="btn btn-ghost btn-sm" data-reqact="decline" data-id="'+q.id+'">Decline</button>':'—';
-      return '<tr><td>'+esc(q.deal_title||'')+'</td><td>'+who+'</td><td>'+esc((q.created_at||'').slice(0,10))+'</td><td>'+distStatusPill(q.status)+'</td><td>'+act+'</td></tr>';
-    }).join('')||'<tr><td colspan="5" class="muted">No requests yet.</td></tr>';
+      var mix=(q.items&&q.items.length)
+        ? q.items.map(function(it){ return esc(kgFmt(it.size_kg))+' kg × '+esc(String(it.qty)); }).join('<br>')+(q.total_kg!=null?'<br><b>'+esc(kgFmt(q.total_kg))+' kg</b>':'')
+        : '<span class="muted">—</span>';
+      return '<tr><td>'+esc(q.deal_title||'')+'</td><td>'+mix+'</td><td>'+who+'</td><td>'+esc((q.created_at||'').slice(0,10))+'</td><td>'+distStatusPill(q.status)+'</td><td>'+act+'</td></tr>';
+    }).join('')||'<tr><td colspan="6" class="muted">No requests yet.</td></tr>';
     box.innerHTML=dealsHtml
       +'<div class="card" style="max-width:560px"><b>Add a deal</b><label>Title</label><input type="text" id="ndtitle" placeholder="e.g. 5 Ton Starter Deal"><label>Price</label><input type="text" id="ndprice" placeholder="R 40 000"><button class="btn" id="ndadd" style="margin-top:10px">Add deal</button></div>'
       +'<div class="h1" style="font-size:18px;margin-top:20px">Requests</div>'
-      +'<div class="tablewrap"><table><thead><tr><th>Deal</th><th>Distributor</th><th>Date</th><th>Status</th><th>Action</th></tr></thead><tbody>'+reqRows+'</tbody></table></div>'
+      +'<div class="tablewrap"><table><thead><tr><th>Deal</th><th>Package</th><th>Distributor</th><th>Date</th><th>Status</th><th>Action</th></tr></thead><tbody>'+reqRows+'</tbody></table></div>'
       +'<div id="admsg"></div>';
     function amsg(html){ var m=document.getElementById('admsg'); if(!m) return; m.innerHTML=html; if(html) setTimeout(function(){ if(m) m.innerHTML=''; }, 2500); }
     box.addEventListener('change', function(ev){
