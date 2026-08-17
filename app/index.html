@@ -369,29 +369,37 @@ function viewDeals(){
     var box=document.getElementById('deals');
     var active=(deals||[]).filter(function(d){return d.is_active;});
     if(!active.length){ box.innerHTML='<div class="msg">No package deals available right now.</div>'; wireNav(); return; }
-    box.innerHTML=active.map(function(d){
-      return '<div class="card" style="border:2px solid var(--yellow);margin-bottom:14px">'
-        +'<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="font-size:42px">🚛</div>'
-          +'<div><div class="pcat">Package deal</div><div style="font-size:20px;font-weight:800;color:var(--green-dark)">'+esc(d.title)+'</div></div>'
-          +'<div style="flex:1"></div><div style="text-align:right"><div class="pprice">'+esc(d.price_text||'')+'</div><div class="muted">'+esc(d.total_text||'')+'</div></div></div>'
-        +(d.subtitle?'<p class="sub" style="margin-top:8px">'+esc(d.subtitle)+'</p>':'')
-        +(d.description?'<div class="msg">'+esc(d.description).replace(/\n/g,'<br>')+'</div>':'')
-        +(d.example?'<div class="msg" style="text-align:left"><b>Example combination</b>'+String(d.example).split('\n').filter(function(x){return x.trim();}).map(function(x){x=x.trim();return /^(…|\.\.\.|or\b)/i.test(x)?'<br><span class="muted">'+esc(x)+'</span>':'<br>• '+esc(x);}).join('')+'</div>':'')
-        +(me.user
-            ? '<button class="btn btn-block" data-reqdeal="'+d.id+'" style="margin-top:8px">Request this package</button>'
-            : '<button class="btn btn-block" data-nav="#/login" style="margin-top:8px">Sign in to request</button>')
-      +'</div>';
-    }).join('')+'<div id="dealmsg"></div>';
-    box.addEventListener('click', function(ev){
-      var n=ev.target.closest && ev.target.closest('[data-nav]'); if(n){ go(n.getAttribute('data-nav')); return; }
-      var rq=ev.target.closest && ev.target.closest('[data-reqdeal]'); if(!rq) return;
-      rq.disabled=true; rq.textContent='Sending…';
-      sb.rpc('request_deal', { p_deal_id: rq.getAttribute('data-reqdeal') }).then(function(rr){
-        if(rr.error){ rq.disabled=false; rq.textContent='Request this package'; document.getElementById('dealmsg').innerHTML='<div class="msg err">Could not send request: '+esc(rr.error.message)+'</div>'; return; }
-        rq.outerHTML='<div class="msg ok">✅ Request sent — a Suthisa representative will be in touch.</div>';
+    function draw(pending){
+      box.innerHTML=active.map(function(d){
+        return '<div class="card" style="border:2px solid var(--yellow);margin-bottom:14px">'
+          +'<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="font-size:42px">🚛</div>'
+            +'<div><div class="pcat">Package deal</div><div style="font-size:20px;font-weight:800;color:var(--green-dark)">'+esc(d.title)+'</div></div>'
+            +'<div style="flex:1"></div><div style="text-align:right"><div class="pprice">'+esc(d.price_text||'')+'</div><div class="muted">'+esc(d.total_text||'')+'</div></div></div>'
+          +(d.subtitle?'<p class="sub" style="margin-top:8px">'+esc(d.subtitle)+'</p>':'')
+          +(d.description?'<div class="msg">'+esc(d.description).replace(/\n/g,'<br>')+'</div>':'')
+          +(d.example?'<div class="msg" style="text-align:left"><b>Example combination</b>'+String(d.example).split('\n').filter(function(x){return x.trim();}).map(function(x){x=x.trim();return /^(…|\.\.\.|or\b)/i.test(x)?'<br><span class="muted">'+esc(x)+'</span>':'<br>• '+esc(x);}).join('')+'</div>':'')
+          +(me.user
+              ? (pending[d.id]?'<div class="msg amber" style="margin-top:8px;text-align:center"><b>Pending — awaiting approval</b></div>':'<button class="btn btn-block" data-reqdeal="'+d.id+'" style="margin-top:8px">Request this package</button>')
+              : '<button class="btn btn-block" data-nav="#/login" style="margin-top:8px">Sign in to request</button>')
+        +'</div>';
+      }).join('')+'<div id="dealmsg"></div>';
+      box.addEventListener('click', function(ev){
+        var n=ev.target.closest && ev.target.closest('[data-nav]'); if(n){ go(n.getAttribute('data-nav')); return; }
+        var rq=ev.target.closest && ev.target.closest('[data-reqdeal]'); if(!rq) return;
+        rq.disabled=true; rq.textContent='Sending…';
+        sb.rpc('request_deal', { p_deal_id: rq.getAttribute('data-reqdeal') }).then(function(rr){
+          if(rr.error){ rq.disabled=false; rq.textContent='Request this package'; document.getElementById('dealmsg').innerHTML='<div class="msg err">Could not send request: '+esc(rr.error.message)+'</div>'; return; }
+          rq.outerHTML='<div class="msg amber" style="margin-top:8px;text-align:center"><b>Pending — awaiting approval</b></div>';
+        });
       });
-    });
-    wireNav();
+      wireNav();
+    }
+    if(me.user){
+      sb.from('deal_requests').select('deal_id').eq('status','pending').then(function(rr){
+        var set={}; (rr.data||[]).forEach(function(x){ if(x.deal_id) set[x.deal_id]=true; });
+        draw(set);
+      });
+    } else { draw({}); }
   });
 }
 function viewShop(){
@@ -502,7 +510,7 @@ function viewCheckout(){
     var f=checkoutState.fulfillment, pay=checkoutState.payment;
     var deliv=f==='delivery'?(settingsCache.default_delivery_fee_cents||0):0;
     var total=cartSubtotal()+deliv;
-    var addr=[myDistributor.address1,myDistributor.address2,myDistributor.city,myDistributor.province].filter(Boolean).join(', ');
+    var addr=[myDistributor.address1,myDistributor.address2,myDistributor.city,myDistributor.province].filter(Boolean).join('\n');
     var name=((myDistributor.name||'')+' '+(myDistributor.surname||'')).trim();
     var depotOpts=(depotsCache||[]).map(function(d){return '<option value="'+d.id+'">'+esc(d.name)+'</option>';}).join('')||'<option value="">(no depots configured)</option>';
     var s=settingsCache, hasBank=!!(s.bank_name);
@@ -824,7 +832,7 @@ function viewProfile(){
         if(!(f.phone.value||'').trim()){ pmsg('<div class="msg err">Phone is required.</div>'); return; }
         var btn=document.getElementById('psave'); btn.disabled=true; btn.textContent='Saving…';
         sb.rpc('update_my_distributor', { p_phone:f.phone.value, p_alternatephone:f.alternatephone.value, p_email:f.email.value, p_address1:f.address1.value, p_address2:f.address2.value, p_city:f.city.value, p_province:f.province.value }).then(function(rr){
-          btn.disabled=false; btn.textContent='Save details';
+          btn.disabled=false; btn.textContent='Save details'; if(!rr.error){ myDistributor=null; }
           pmsg(rr.error?'<div class="msg err">Save failed: '+esc(rr.error.message)+'</div>':'<div class="msg ok">Details saved ✓</div>');
         });
       });
