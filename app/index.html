@@ -22,6 +22,7 @@ td input.stock{width:70px}
 select,textarea{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;font-family:inherit;background:#fff;color:var(--ink)}
 textarea{min-height:118px;line-height:1.5;resize:vertical}
 td select{width:auto;padding:6px 8px;font-size:14px}
+input[readonly],textarea[readonly]{background:var(--bg);color:var(--muted);cursor:not-allowed}
 .btn{border:0;border-radius:10px;padding:11px 16px;font-weight:700;font-size:15px;background:var(--green);color:#fff;cursor:pointer}
 .btn:hover{background:var(--green-dark)}.btn:disabled{opacity:.6;cursor:not-allowed}
 .btn-block{display:block;width:100%}
@@ -505,14 +506,15 @@ function viewCheckout(){
     var s=settingsCache, hasBank=!!(s.bank_name);
     shell('<button class="btn btn-ghost btn-sm" data-nav="#/cart">‹ Back to cart</button><div class="h1" style="margin-top:8px">Checkout</div>'
       +'<form id="co"><div class="card"><b>Your details</b>'
-        +'<label>Name</label><input name="name" value="'+esc(name)+'">'
-        +'<label>Phone</label><input name="phone" value="'+esc(myDistributor.phone||'')+'">'
+        +'<p class="muted" style="margin:2px 0 4px">Name &amp; phone come from your account — <button type="button" data-nav="#/profile" class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:12px">Edit on Profile</button></p>'
+        +'<label>Name</label><input name="name" value="'+esc(name)+'" readonly>'
+        +'<label>Phone</label><input name="phone" value="'+esc(myDistributor.phone||'')+'" readonly>'
       +'</div>'
       +'<div class="card" style="margin-top:12px"><b>How would you like to receive it?</b>'
         +'<label class="radio"><span>🚚 <b>Delivery</b> — to your address</span><input type="radio" name="ff" value="delivery"'+(f==='delivery'?' checked':'')+'></label>'
         +'<div class="muted" style="margin:-2px 4px 10px">Delivery fee: <b>'+zar(settingsCache.default_delivery_fee_cents||0)+'</b></div>'
         +'<label class="radio"><span>🏬 <b>Collection</b> — pick up at a depot <span class="muted">(free)</span></span><input type="radio" name="ff" value="collection"'+(f==='collection'?' checked':'')+'></label>'
-        +(f==='delivery'?'<label>Delivery address</label><textarea name="address" rows="4" placeholder="Street, suburb, city, postal code">'+esc(addr)+'</textarea>':'<label>Collect from</label><select name="depot">'+depotOpts+'</select><div id="depinfo" class="msg" style="text-align:left;margin-top:8px"></div>')
+        +(f==='delivery'?'<label>Delivery address <span style="color:var(--red)">*</span></label><textarea name="address" rows="4" required placeholder="Street, suburb, city, postal code">'+esc(addr)+'</textarea>':'<label>Collect from</label><select name="depot">'+depotOpts+'</select><div id="depinfo" class="msg" style="text-align:left;margin-top:8px"></div>')
       +'</div>'
       +'<div class="card" style="margin-top:12px"><b>Payment</b>'
         +'<label class="radio"><span>💵 <b>Cash</b> — pay on '+(f==='collection'?'collection':'delivery')+'</span><input type="radio" name="pay" value="cash"'+(pay==='cash'?' checked':'')+'></label>'
@@ -539,9 +541,9 @@ function placeOrder(){
   var form=document.getElementById('co');
   var items=cart.map(function(l){ return {variant_id:l.variant_id, qty:l.qty}; });
   var f=checkoutState.fulfillment;
-  var address=f==='delivery'?(form.address?form.address.value:''):null;
+  var address=f==='delivery'?((form.address&&form.address.value)||'').trim():null;
   var depot=f==='collection'?(form.depot?form.depot.value:null):null;
-  if(f==='delivery' && !address){ btn.disabled=false; btn.textContent='Place order'; alert('Please enter a delivery address'); return; }
+  if(f==='delivery' && !address){ btn.disabled=false; btn.textContent='Place order'; if(form.address) form.address.focus(); alert('Please enter a delivery address before placing the order.'); return; }
   sb.rpc('place_order', { p_items:items, p_fulfillment:f, p_delivery_address:address, p_depot_id:depot||null, p_payment_method:checkoutState.payment, p_notes:null })
     .then(function(r){
       if(r.error){ btn.disabled=false; btn.textContent='Place order'; alert('Could not place order: '+r.error.message); return; }
