@@ -69,6 +69,8 @@ tbody tr:nth-child(even){background:#f7faf8}
 .pimg{height:130px;background:linear-gradient(135deg,var(--green-soft),#fffde7);display:grid;place-items:center;border-radius:12px;margin-bottom:10px}
 .pimg img{max-width:84px;max-height:96px;object-fit:contain;display:block}
 .pimg.detail{height:180px}.pimg.detail img{max-width:150px;max-height:150px}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto;z-index:100}
+.modal-box{background:#fff;border-radius:14px;padding:18px;max-width:560px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.35)}
 </style>
 </head>
 <body>
@@ -610,29 +612,77 @@ function viewMyOrders(){
     });
 }
 var ORDER_STATUSES=['pending','confirmed','preparing','ready','out_for_delivery','completed','cancelled','refunded'];
+var adminOrdersFilter='all';
 function viewAdminOrders(){
-  shell('<div class="h1">Orders</div><div id="ao" class="muted">Loading…</div>','adminorders');
-  sb.from('orders').select('id,order_number,status,payment_method,payment_status,total_cents,placed_at,distributors(name,surname),payments(id,proof_url,status)').order('placed_at',{ascending:false})
-    .then(function(r){
+  shell('<div class="h1">Orders</div>'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><label style="margin:0">Filter:</label>'
+      +'<select id="ofilter" style="width:auto"><option value="all"'+(adminOrdersFilter==='all'?' selected':'')+'>All statuses</option>'
+        +ORDER_STATUSES.map(function(s){return '<option value="'+s+'"'+(adminOrdersFilter===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div>'
+    +'<div id="ao" class="muted">Loading…</div>','adminorders');
+  var fs=document.getElementById('ofilter'); if(fs) fs.addEventListener('change', function(){ adminOrdersFilter=this.value; viewAdminOrders(); });
+  var q=sb.from('orders').select('id,order_number,status,payment_method,payment_status,total_cents,placed_at,distributors(name,surname),payments(id,proof_url,status)');
+  if(adminOrdersFilter!=='all') q=q.eq('status', adminOrdersFilter);
+  q.order('placed_at',{ascending:false}).then(function(r){
       var box=document.getElementById('ao');
       if(r.error){ box.innerHTML='<div class="msg err">'+esc(r.error.message)+'</div>'; return; }
       var os=r.data||[];
+      if(!os.length){ box.innerHTML='<div class="msg">No orders'+(adminOrdersFilter!=='all'?' with status "'+esc(adminOrdersFilter)+'"':' yet')+'.</div>'; return; }
       box.innerHTML='<div class="tablewrap"><table><thead><tr><th>Order</th><th>Distributor</th><th>Total</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody>'
         +os.map(function(o){
           var d=o.distributors?((o.distributors.name||'')+' '+(o.distributors.surname||'')).trim():'';
           var pay=(o.payments||[])[0];
           var opts=ORDER_STATUSES.map(function(s){return '<option'+(s===o.status?' selected':'')+'>'+s+'</option>';}).join('');
-          var verify=(o.payment_method==='eft' && pay && pay.proof_url && o.payment_status!=='paid')?'<button class="btn btn-sm btn-ghost" data-viewproof="'+esc(pay.proof_url)+'">View proof</button> <button class="btn btn-sm" data-verify="1" data-oid="'+o.id+'" data-pid="'+pay.id+'">Mark paid</button>':'';
+          var verify=(o.payment_method==='eft' && pay && pay.proof_url && o.payment_status!=='paid')?' <button class="btn btn-sm btn-ghost" data-viewproof="'+esc(pay.proof_url)+'">View proof</button> <button class="btn btn-sm" data-verify="1" data-oid="'+o.id+'" data-pid="'+pay.id+'">Mark paid</button>':'';
           return '<tr><td>'+esc(o.order_number)+'</td><td>'+esc(d)+'</td><td>'+zar(o.total_cents)+'</td><td>'+esc(o.payment_method)+' · '+esc(o.payment_status)+'</td>'
-            +'<td><select data-status data-oid="'+o.id+'">'+opts+'</select></td><td>'+verify+'</td></tr>';
+            +'<td><select data-status data-oid="'+o.id+'">'+opts+'</select></td>'
+            +'<td class="actions"><button class="btn btn-sm btn-ghost" data-vieworder="'+o.id+'">View</button>'+verify+'</td></tr>';
         }).join('')+'</tbody></table></div><div id="aomsg"></div>';
       box.addEventListener('change', function(ev){ var s=ev.target; if(s.hasAttribute&&s.hasAttribute('data-status')){ sb.from('orders').update({status:s.value}).eq('id',s.getAttribute('data-oid')).then(function(rr){ document.getElementById('aomsg').innerHTML=rr.error?'<div class="msg err">'+esc(rr.error.message)+'</div>':'<div class="msg ok">Status updated ✓</div>'; }); } });
       box.addEventListener('click', function(ev){
+        var vo=ev.target.closest && ev.target.closest('[data-vieworder]');
+        if(vo){ showOrderModal(vo.getAttribute('data-vieworder')); return; }
         var vp=ev.target.closest && ev.target.closest('[data-viewproof]');
         if(vp){ sb.storage.from('pop-uploads').createSignedUrl(vp.getAttribute('data-viewproof'),120).then(function(u){ if(u.data&&u.data.signedUrl){ window.open(u.data.signedUrl,'_blank'); } else { alert('Could not open proof'+(u.error?': '+u.error.message:'')); } }); return; }
         var vb=ev.target.closest && ev.target.closest('[data-verify]');
         if(vb){ if(!confirm('Mark this EFT payment as verified / paid?')) return; var pid=vb.getAttribute('data-pid'), oid=vb.getAttribute('data-oid'); sb.from('payments').update({status:'verified', verified_by:me.user.id, verified_at:new Date().toISOString()}).eq('id',pid).then(function(rr){ if(rr.error){ alert('Verify failed: '+rr.error.message); return; } sb.from('orders').update({payment_status:'paid'}).eq('id',oid).then(function(){ viewAdminOrders(); }); }); return; }
       });
+    });
+}
+function showOrderModal(orderId){
+  var host=document.createElement('div'); host.className='modal-overlay';
+  host.innerHTML='<div class="modal-box"><div class="muted">Loading…</div></div>';
+  host.addEventListener('click', function(ev){ if(ev.target===host || (ev.target.closest && ev.target.closest('[data-close]'))) document.body.removeChild(host); });
+  document.body.appendChild(host);
+  sb.from('orders').select('*,distributors(name,surname,login_name,phone,alternatephone,email,address1,address2,city,province),depots(name,address),order_items(product_name,size_kg,unit_price_cents,qty)').eq('id',orderId).maybeSingle()
+    .then(function(r){
+      var box=host.querySelector('.modal-box');
+      if(r.error||!r.data){ box.innerHTML='<div class="msg err">Could not load order'+(r.error?': '+esc(r.error.message):'')+'</div><button class="btn btn-block" data-close style="margin-top:10px">Close</button>'; return; }
+      var o=r.data, d=o.distributors||{};
+      box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div class="h1" style="margin:0">Order '+esc(o.order_number)+'</div><button class="btn btn-ghost btn-sm" data-close>✕</button></div>'
+        +'<p class="sub">Placed '+esc(String(o.placed_at||'').slice(0,16).replace('T',' '))+' · <span class="pill">'+esc(o.status)+'</span></p>'
+        +'<div class="card" style="margin-top:0"><b>Distributor</b>'
+          +'<div class="sumrow"><span class="muted">Name</span><b>'+esc(((d.name||'')+' '+(d.surname||'')).trim())+'</b></div>'
+          +'<div class="sumrow"><span class="muted">Login</span><b>'+esc(d.login_name||'')+'</b></div>'
+          +'<div class="sumrow"><span class="muted">Phone</span><b>'+esc(d.phone||'')+(d.alternatephone?' / '+esc(d.alternatephone):'')+'</b></div>'
+          +'<div class="sumrow"><span class="muted">Email</span><b>'+esc(d.email||'—')+'</b></div>'
+        +'</div>'
+        +'<div class="card" style="margin-top:10px"><b>Fulfilment</b>'
+          +'<div class="sumrow"><span class="muted">Method</span><b>'+esc(o.fulfillment_type||'')+'</b></div>'
+          +(o.fulfillment_type==='delivery'
+             ? '<div class="sumrow"><span class="muted">Deliver to</span><b style="text-align:right;max-width:62%;white-space:pre-line">'+esc(o.delivery_address||'—')+'</b></div>'
+             : '<div class="sumrow"><span class="muted">Collect at</span><b style="text-align:right;max-width:62%">'+esc(o.depots?((o.depots.name||'')+(o.depots.address?' — '+o.depots.address:'')):'—')+'</b></div>')
+        +'</div>'
+        +'<div class="card" style="margin-top:10px"><b>Items</b>'
+          +(o.order_items||[]).map(function(i){return '<div class="sumrow"><span>'+esc(i.product_name)+' '+i.size_kg+'kg × '+i.qty+'</span><b>'+zar(i.unit_price_cents*i.qty)+'</b></div>';}).join('')
+          +'<div class="sumrow"><span>Delivery</span><b>'+zar(o.delivery_fee_cents)+'</b></div>'
+          +'<div class="sumrow total"><span>Total</span><b>'+zar(o.total_cents)+'</b></div>'
+        +'</div>'
+        +'<div class="card" style="margin-top:10px"><b>Payment</b>'
+          +'<div class="sumrow"><span class="muted">Method</span><b>'+esc(o.payment_method||'')+'</b></div>'
+          +'<div class="sumrow"><span class="muted">Status</span><b>'+esc(o.payment_status||'')+'</b></div>'
+          +(o.notes?'<div class="sumrow"><span class="muted">Notes</span><b>'+esc(o.notes)+'</b></div>':'')
+        +'</div>'
+        +'<button class="btn btn-block" data-close style="margin-top:12px">Close</button>';
     });
 }
 
