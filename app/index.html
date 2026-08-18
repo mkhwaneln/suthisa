@@ -128,6 +128,7 @@ function renderRoute(){
   if(!me.user){  // guest (not logged in): public catalogue + package deal
     if(r.view==='product') return viewProduct(r.id);
     if(r.view==='deals')   return viewDeals();
+    if(r.view==='deal')    return viewDeal(r.id);
     if(r.view==='login')   return renderLogin();
     if(r.view==='cart'||r.view==='checkout'||r.view==='orders') return renderLogin('Please sign in to order.');
     return viewShop();
@@ -151,6 +152,7 @@ function renderRoute(){
     case 'confirm':  return viewConfirm(r.id);
     case 'orders':   return viewMyOrders();
     case 'deals':    return viewDeals();
+    case 'deal':     return viewDeal(r.id);
     case 'profile':  return viewProfile();
     default:         return viewShop();
   }
@@ -399,10 +401,10 @@ function dealMixHtml(items){
 }
 function dealBanner(deal){
   if(!deal) return '';
-  return '<div class="card" data-open-deal="1" style="cursor:pointer;border:2px solid var(--yellow);background:#fffde7;display:flex;align-items:center;gap:12px;margin-bottom:14px">'
+  return '<div class="card" data-viewdeal="'+deal.id+'" style="cursor:pointer;border:2px solid var(--yellow);background:#fffde7;display:flex;align-items:center;gap:12px;margin-bottom:14px">'
     +'<div style="font-size:32px">🚛</div>'
-    +'<div style="flex:1"><b>'+esc(deal.title)+(deal.price_text?' — '+esc(deal.price_text):'')+'</b><div class="muted">'+esc(deal.subtitle||'Tap to view our package deals.')+'</div></div>'
-    +'<span class="btn btn-sm" style="background:var(--yellow);color:var(--green-dark)">View deals</span></div>';
+    +'<div style="flex:1"><b>'+esc(deal.title)+(deal.price_text?' — '+esc(deal.price_text):'')+'</b><div class="muted">'+esc(deal.subtitle||'Tap to view this package deal.')+'</div></div>'
+    +'<span class="btn btn-sm" style="background:var(--yellow);color:var(--green-dark)">View Deal</span></div>';
 }
 function viewDeals(){
   shell('<button class="btn btn-ghost btn-sm" data-nav="#/shop">‹ Back to shop</button>'
@@ -414,24 +416,50 @@ function viewDeals(){
     if(!active.length){ box.innerHTML='<div class="msg">No package deals available right now.</div>'; wireNav(); return; }
     function draw(reqMap){
       box.innerHTML=active.map(function(d){
+        var st=reqMap[d.id]?reqMap[d.id].status:'';
+        var pill = st==='approved'?'<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:#e8f5e9;color:var(--green-dark);font-size:12px;font-weight:700">Approved</span>'
+                 : st==='pending'?'<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:#fff8e1;color:#8a6d00;font-size:12px;font-weight:700">Pending</span>':'';
         return '<div class="card" style="border:2px solid var(--yellow);margin-bottom:14px">'
           +'<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="font-size:42px">🚛</div>'
-            +'<div><div class="pcat">Package deal</div><div style="font-size:20px;font-weight:800;color:var(--green-dark)">'+esc(d.title)+'</div></div>'
-            +'<div style="flex:1"></div><div style="text-align:right"><div class="pprice">'+esc(d.price_text||'')+'</div><div class="muted">'+esc(d.total_text||'')+'</div></div></div>'
+            +'<div style="flex:1;min-width:120px"><div class="pcat">Package deal</div><div style="font-size:20px;font-weight:800;color:var(--green-dark)">'+esc(d.title)+'</div>'+(pill?'<div style="margin-top:4px">'+pill+'</div>':'')+'</div>'
+            +'<div style="text-align:right"><div class="pprice">'+esc(d.price_text||'')+'</div><div class="muted">'+esc(d.total_text||'')+'</div></div></div>'
           +(d.subtitle?'<p class="sub" style="margin-top:8px">'+esc(d.subtitle)+'</p>':'')
-          +(d.description?'<div class="msg">'+esc(d.description).replace(/\n/g,'<br>')+'</div>':'')
-          +(d.example?'<div class="msg" style="text-align:left"><b>Example combination</b>'+String(d.example).split('\n').filter(function(x){return x.trim();}).map(function(x){x=x.trim();return /^(…|\.\.\.|or\b)/i.test(x)?'<br><span class="muted">'+esc(x)+'</span>':'<br>• '+esc(x);}).join('')+'</div>':'')
-          +(me.user
-              ? (reqMap[d.id] && reqMap[d.id].status==='pending'
-                   ? '<div class="msg amber" style="margin-top:8px;text-align:center"><b>Pending — awaiting approval</b></div>'
-                   : (reqMap[d.id] && reqMap[d.id].status==='approved'
-                        ? dealMixHtml(reqMap[d.id].items)+'<button class="btn btn-block" data-orderpkg="'+d.id+'" style="margin-top:8px">Order Package</button>'
-                        : (dealBuildable(d)
-                             ? dealBuilderHtml(d)
-                             : '<button class="btn btn-block" data-reqdeal="'+d.id+'" style="margin-top:8px">Request this package</button>')))
-              : '<button class="btn btn-block" data-nav="#/login" style="margin-top:8px">Sign in to request</button>')
+          +'<button class="btn btn-block" data-nav="#/deal/'+d.id+'" style="margin-top:8px">View Deal</button>'
         +'</div>';
-      }).join('')+'<div id="dealmsg"></div>';
+      }).join('');
+      wireNav();
+    }
+    if(me.user){
+      sb.from('deal_requests').select('deal_id,status,items,created_at').in('status',['pending','approved']).order('created_at',{ascending:false}).then(function(rr){
+        var map={}; (rr.data||[]).forEach(function(x){ if(x.deal_id && !map[x.deal_id]) map[x.deal_id]={status:x.status, items:x.items||[]}; });
+        draw(map);
+      });
+    } else { draw({}); }
+  });
+}
+function viewDeal(id){
+  shell('<button class="btn btn-ghost btn-sm" data-nav="#/deals">‹ Back to deals</button>'
+    +'<div id="deal" class="muted" style="margin-top:8px">Loading…</div>', 'deals');
+  loadDeals(function(deals){
+    var box=document.getElementById('deal');
+    var d=(deals||[]).filter(function(x){return x.id===id && x.is_active;})[0];
+    if(!d){ box.innerHTML='<div class="msg err">This deal is no longer available.</div>'; wireNav(); return; }
+    function render(req){
+      var header='<div class="card" style="border:2px solid var(--yellow)">'
+        +'<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="font-size:42px">🚛</div>'
+          +'<div style="flex:1;min-width:120px"><div class="pcat">Package deal</div><div style="font-size:22px;font-weight:800;color:var(--green-dark)">'+esc(d.title)+'</div></div>'
+          +'<div style="text-align:right"><div class="pprice">'+esc(d.price_text||'')+'</div><div class="muted">'+esc(d.total_text||'')+'</div></div></div>'
+        +(d.subtitle?'<p class="sub" style="margin-top:8px">'+esc(d.subtitle)+'</p>':'')
+        +(d.description?'<div class="msg">'+esc(d.description).replace(/\n/g,'<br>')+'</div>':'')
+        +(d.example?'<div class="msg" style="text-align:left"><b>Example combination</b>'+String(d.example).split('\n').filter(function(x){return x.trim();}).map(function(x){x=x.trim();return /^(…|\.\.\.|or\b)/i.test(x)?'<br><span class="muted">'+esc(x)+'</span>':'<br>• '+esc(x);}).join('')+'</div>':'')
+        +'</div>';
+      var action;
+      if(!me.user){ action='<button class="btn btn-block" data-nav="#/login" style="margin-top:12px">Sign in to request</button>'; }
+      else if(req && req.status==='pending'){ action='<div class="msg amber" style="margin-top:12px;text-align:center"><b>Pending — awaiting approval</b></div>'; }
+      else if(req && req.status==='approved'){ action='<div class="card" style="margin-top:12px"><div class="h1" style="font-size:18px">Order Package</div>'+dealMixHtml(req.items)+'<button class="btn btn-block" data-orderpkg="'+d.id+'" style="margin-top:8px">Order Package</button></div>'; }
+      else if(dealBuildable(d)){ action='<div class="card" style="margin-top:12px"><div class="h1" style="font-size:18px">Request Package</div><p class="sub">Choose the quantity of each bag size — must total '+kgFmt(Number(d.target_kg))+' kg.</p>'+dealBuilderHtml(d)+'</div>'; }
+      else { action='<button class="btn btn-block" data-reqdeal="'+d.id+'" style="margin-top:12px">Request this package</button>'; }
+      box.innerHTML=header+action+'<div id="dealmsg"></div>';
       box.addEventListener('input', function(ev){
         var q=ev.target.closest && ev.target.closest('[data-qty]'); if(q) recalcBuild(q.getAttribute('data-deal'));
       });
@@ -439,13 +467,12 @@ function viewDeals(){
         var n=ev.target.closest && ev.target.closest('[data-nav]'); if(n){ go(n.getAttribute('data-nav')); return; }
         var op=ev.target.closest && ev.target.closest('[data-orderpkg]');
         if(op){
-          var odid=op.getAttribute('data-orderpkg'), oreq=reqMap[odid];
-          if(!oreq || !oreq.items || !oreq.items.length){ document.getElementById('dealmsg').innerHTML='<div class="msg err">This package has no items to order.</div>'; return; }
+          if(!req || !req.items || !req.items.length){ document.getElementById('dealmsg').innerHTML='<div class="msg err">This package has no items to order.</div>'; return; }
           op.disabled=true; op.textContent='Adding…';
           loadCatalogueData(function(products, err){
             if(err){ op.disabled=false; op.textContent='Order Package'; document.getElementById('dealmsg').innerHTML='<div class="msg err">Could not load products: '+esc(err.message)+'</div>'; return; }
             var missing=[];
-            oreq.items.forEach(function(it){
+            req.items.forEach(function(it){
               var fv=null, fp=null;
               products.forEach(function(p){ (p.product_variants||[]).forEach(function(v){ if(Number(v.size_kg)===Number(it.size_kg)){ fv=v; fp=p; } }); });
               if(fv){ addToCart(fv, fp, it.qty); } else { missing.push(it.size_kg); }
@@ -463,7 +490,7 @@ function viewDeals(){
           sd.disabled=true; sd.textContent='Sending…';
           sb.rpc('request_deal', { p_deal_id: did, p_items: items, p_total_kg: total }).then(function(rr){
             if(rr.error){ sd.disabled=false; sd.textContent='Request this package'; document.getElementById('dealmsg').innerHTML='<div class="msg err">Could not send request: '+esc(rr.error.message)+'</div>'; return; }
-            root.outerHTML='<div class="msg amber" style="margin-top:8px;text-align:center"><b>Pending — awaiting approval</b></div>';
+            var card=root.closest('.card'); if(card){ card.outerHTML='<div class="msg amber" style="margin-top:12px;text-align:center"><b>Pending — awaiting approval</b></div>'; }
           });
           return;
         }
@@ -471,17 +498,17 @@ function viewDeals(){
         rq.disabled=true; rq.textContent='Sending…';
         sb.rpc('request_deal', { p_deal_id: rq.getAttribute('data-reqdeal') }).then(function(rr){
           if(rr.error){ rq.disabled=false; rq.textContent='Request this package'; document.getElementById('dealmsg').innerHTML='<div class="msg err">Could not send request: '+esc(rr.error.message)+'</div>'; return; }
-          rq.outerHTML='<div class="msg amber" style="margin-top:8px;text-align:center"><b>Pending — awaiting approval</b></div>';
+          rq.outerHTML='<div class="msg amber" style="margin-top:12px;text-align:center"><b>Pending — awaiting approval</b></div>';
         });
       });
       wireNav();
     }
     if(me.user){
-      sb.from('deal_requests').select('deal_id,status,items,created_at').in('status',['pending','approved']).order('created_at',{ascending:false}).then(function(rr){
-        var map={}; (rr.data||[]).forEach(function(x){ if(x.deal_id && !map[x.deal_id]) map[x.deal_id]={status:x.status, items:x.items||[]}; });
-        draw(map);
+      sb.from('deal_requests').select('status,items,created_at').eq('deal_id', id).in('status',['pending','approved']).order('created_at',{ascending:false}).limit(1).then(function(rr){
+        var row=(rr.data&&rr.data[0])||null;
+        render(row?{status:row.status, items:row.items||[]}:null);
       });
-    } else { draw({}); }
+    } else { render(null); }
   });
 }
 function viewShop(){
@@ -508,6 +535,7 @@ function viewShop(){
         if(hasPending){ banners+='<div class="card" data-open-deal="1" style="cursor:pointer;border:2px solid var(--yellow);background:#fff8e1;display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="font-size:28px">⏳</div><div style="flex:1"><b>Package deal request pending</b><div class="muted">Your request is awaiting approval. Tap to view.</div></div><span class="btn btn-sm" style="background:var(--yellow);color:var(--green-dark)">View</span></div>'; }
         box.innerHTML=banners+dealBanner(activeDeal)+grid;
         box.addEventListener('click', function(ev){
+          var vd=ev.target.closest && ev.target.closest('[data-viewdeal]'); if(vd){ go('#/deal/'+vd.getAttribute('data-viewdeal')); return; }
           var d=ev.target.closest && ev.target.closest('[data-open-deal]'); if(d){ go('#/deals'); return; }
           var el=ev.target.closest('[data-open]'); if(el){ go('#/product/'+el.getAttribute('data-open')); }
         });
