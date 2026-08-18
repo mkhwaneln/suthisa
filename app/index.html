@@ -647,7 +647,7 @@ function viewCheckout(){
     var saving=hasFixed?Math.max(0, subtotal-pkg.price_cents):0;
     var total=goods+deliv;
     var summaryLines = pkg
-      ? '<div class="sumrow"><span>'+esc(pkg.title||'Package deal')+' × '+cart.reduce(function(a,l){return a+l.qty;},0)+'</span><b>'+zar(goods)+'</b></div>'+(saving>0?'<div class="sumrow"><span class="muted">Package saving</span><b style="color:var(--green-dark)">'+zar(saving)+'</b></div>':'')
+      ? '<div class="sumrow"><span>'+esc(pkg.title||'Package deal')+' × 1</span><b>'+zar(goods)+'</b></div>'
       : cart.map(function(l){return '<div class="sumrow"><span>'+esc(l.product_name)+' '+l.size_kg+'kg × '+l.qty+'</span><b>'+zar(l.unit_price_cents*l.qty)+'</b></div>';}).join('');
     var addr=[myDistributor.address1,myDistributor.address2,myDistributor.city,myDistributor.province].filter(Boolean).join('\n');
     var name=((myDistributor.name||'')+' '+(myDistributor.surname||'')).trim();
@@ -714,8 +714,9 @@ function viewConfirm(orderId){
       if(r.error||!r.data){ box.innerHTML='<div class="msg err">Order not found.</div>'; return; }
       var o=r.data, eftPending=(o.payment_method==='eft' && o.payment_status==='unpaid');
       var hasProof=(o.payments||[]).some(function(p){return p.proof_url;});
+      var pkgFixed=(o.total_cents||0)-(o.delivery_fee_cents||0), pkgReg=pkgFixed+(o.discount_cents||0);
       var pkgItems = o.is_package
-        ? '<div class="sumrow"><span>'+esc(o.notes||'Package deal')+' × '+(o.order_items||[]).reduce(function(a,i){return a+i.qty;},0)+'</span><b>'+zar((o.total_cents||0)-(o.delivery_fee_cents||0))+'</b></div>'+(o.discount_cents>0?'<div class="sumrow"><span class="muted">Package saving</span><b style="color:var(--green-dark)">'+zar(o.discount_cents)+'</b></div>':'')
+        ? '<div class="sumrow"><span>'+esc(o.notes||'Package deal')+' × 1</span><b>'+zar(pkgFixed)+'</b></div>'+(o.discount_cents>0?'<div class="sumrow"><span class="muted">Discount <span style="font-size:12px">(vs. '+zar(pkgReg)+' regular)</span></span><b style="color:var(--green-dark)">'+zar(o.discount_cents)+'</b></div>':'')
         : (o.order_items||[]).map(function(i){return '<div class="sumrow"><span>'+esc(i.product_name)+' '+i.size_kg+'kg × '+i.qty+'</span><b>'+zar(i.unit_price_cents*i.qty)+'</b></div>';}).join('');
       box.innerHTML='<div class="card" style="max-width:560px;margin:0 auto">'
         +'<div class="h1">Order '+esc(o.order_number)+'</div><p class="sub">Status: <span class="pill">'+esc(titleCase(o.status))+'</span> · Payment: <span class="pill">'+esc(o.payment_status)+'</span>'+(o.is_package?' · <span class="pill" style="background:var(--yellow);color:var(--green-dark)">Package deal</span>':'')+'</p>'
