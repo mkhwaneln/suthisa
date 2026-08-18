@@ -119,6 +119,12 @@ function loadCart(){ try{ cart=JSON.parse(localStorage.getItem(cartKey()))||[]; 
 function saveCart(){ try{ localStorage.setItem(cartKey(), JSON.stringify(cart)); }catch(e){} }
 function cartCount(){ return cart.reduce(function(a,l){return a+l.qty;},0); }
 function cartSubtotal(){ return cart.reduce(function(a,l){return a+l.unit_price_cents*l.qty;},0); }
+// package-deal context: a fixed price (cents) that discounts the cart to the admin's deal price
+function parsePriceCents(text){ var dg=String(text==null?'':text).replace(/[^\d]/g,''); return dg?parseInt(dg,10)*100:0; }
+function pkgKey(){ return cartKey()+':pkg'; }
+function getPendingPackage(){ try{ return JSON.parse(localStorage.getItem(pkgKey()))||null; }catch(e){ return null; } }
+function setPendingPackage(p){ try{ if(p&&p.price_cents>0) localStorage.setItem(pkgKey(), JSON.stringify(p)); else localStorage.removeItem(pkgKey()); }catch(e){} }
+function pkgDiscount(){ var pkg=getPendingPackage(); return (pkg&&pkg.price_cents>0)?Math.max(0, cartSubtotal()-pkg.price_cents):0; }
 
 /* ---------- router ---------- */
 function go(hash){ location.hash=hash; }
@@ -471,13 +477,16 @@ function viewDeal(id){
           op.disabled=true; op.textContent='Adding…';
           loadCatalogueData(function(products, err){
             if(err){ op.disabled=false; op.textContent='Order Package'; document.getElementById('dealmsg').innerHTML='<div class="msg err">Could not load products: '+esc(err.message)+'</div>'; return; }
-            var added=0;
+            var toAdd=[];
             req.items.forEach(function(it){
               var fv=null, fp=null;
               products.forEach(function(p){ (p.product_variants||[]).forEach(function(v){ if(Number(v.size_kg)===Number(it.size_kg)){ fv=v; fp=p; } }); });
-              if(fv){ addToCart(fv, fp, it.qty); added++; }
+              if(fv) toAdd.push({v:fv, p:fp, qty:it.qty});
             });
-            if(!added){ op.disabled=false; op.textContent='Order Package'; document.getElementById('dealmsg').innerHTML='<div class="msg err">None of this package\'s sizes are available right now.</div>'; return; }
+            if(!toAdd.length){ op.disabled=false; op.textContent='Order Package'; document.getElementById('dealmsg').innerHTML='<div class="msg err">None of this package\'s sizes are available right now.</div>'; return; }
+            cart=[]; saveCart(); // the package is the whole order
+            toAdd.forEach(function(x){ addToCart(x.v, x.p, x.qty); });
+            setPendingPackage({ deal_id:d.id, price_cents:parsePriceCents(d.price_text) });
             go('#/checkout');
           });
           return;
@@ -574,7 +583,7 @@ function viewProduct(id){
       var s=ev.target.closest('[data-size]'); if(s){ sel.variantId=s.getAttribute('data-size'); sel.qty=1; viewProduct(id); return; }
       var b=ev.target.closest('[data-nav]'); if(b){ go(b.getAttribute('data-nav')); return; }
       var q=ev.target.closest('[data-q]'); if(q){ sel.qty=Math.max(1, sel.qty+parseInt(q.getAttribute('data-q'),10)); viewProduct(id); return; }
-      if(ev.target.id==='add'){ addToCart(v, p, sel.qty); go('#/cart'); }
+      if(ev.target.id==='add'){ setPendingPackage(null); addToCart(v, p, sel.qty); go('#/cart'); }
     });
   });
 }
@@ -585,8 +594,8 @@ function addToCart(v, p, qty){
 }
 
 /* ---------- cart (distributor) ---------- */
-function setCartQty(vid, d){ var l=cart.filter(function(x){return x.variant_id===vid;})[0]; if(!l)return; l.qty=Math.max(1,l.qty+d); saveCart(); viewCart(); }
-function removeCartLine(vid){ cart=cart.filter(function(x){return x.variant_id!==vid;}); saveCart(); viewCart(); }
+function setCartQty(vid, d){ var l=cart.filter(function(x){return x.variant_id===vid;})[0]; if(!l)return; l.qty=Math.max(1,l.qty+d); setPendingPackage(null); saveCart(); viewCart(); }
+function removeCartLine(vid){ cart=cart.filter(function(x){return x.variant_id!==vid;}); setPendingPackage(null); saveCart(); viewCart(); }
 function viewCart(){
   if(!cart.length){ shell('<div class="h1">Your cart</div><div class="msg">Your cart is empty. <button class="btn btn-sm" data-nav="#/shop">Browse products</button></div>','cart'); wireNav(); return; }
   var rows=cart.map(function(l){ return '<tr><td><b>'+esc(l.product_name)+'</b><br><span class="muted">'+l.size_kg+' kg · wholesale</span></td>'
@@ -631,7 +640,8 @@ function viewCheckout(){
   loadCheckoutRefs(function(){
     var f=checkoutState.fulfillment, pay=checkoutState.payment;
     var deliv=f==='delivery'?(settingsCache.default_delivery_fee_cents||0):0;
-    var total=cartSubtotal()+deliv;
+    var subtotal=cartSubtotal(), discount=pkgDiscount();
+    var total=subtotal-discount+deliv;
     var addr=[myDistributor.address1,myDistributor.address2,myDistributor.city,myDistributor.province].filter(Boolean).join('\n');
     var name=((myDistributor.name||'')+' '+(myDistributor.surname||'')).trim();
     var depotOpts=(depotsCache||[]).map(function(d){return '<option value="'+d.id+'">'+esc(d.name)+'</option>';}).join('')||'<option value="">(no depots configured)</option>';
@@ -655,6 +665,7 @@ function viewCheckout(){
       +'</div></form>'
       +'<div class="card" style="margin-top:12px"><b>Summary</b>'
         +cart.map(function(l){return '<div class="sumrow"><span>'+esc(l.product_name)+' '+l.size_kg+'kg × '+l.qty+'</span><b>'+zar(l.unit_price_cents*l.qty)+'</b></div>';}).join('')
+        +(discount>0?'<div class="sumrow"><span>Total Discount <span class="muted">(package deal)</span></span><b style="color:var(--green-dark)">− '+zar(discount)+'</b></div>':'')
         +'<div class="sumrow"><span>Delivery</span><b>'+zar(deliv)+'</b></div>'
         +'<div class="sumrow"><span>VAT (zero-rated)</span><b>'+zar(0)+'</b></div>'
         +'<div class="sumrow"><span><b>Total</b></span><b>'+zar(total)+'</b></div>'
@@ -676,11 +687,13 @@ function placeOrder(){
   var address=f==='delivery'?((form.address&&form.address.value)||'').trim():null;
   var depot=f==='collection'?(form.depot?form.depot.value:null):null;
   if(f==='delivery' && !address){ btn.disabled=false; btn.textContent='Place order'; if(form.address) form.address.focus(); alert('Please enter a delivery address before placing the order.'); return; }
-  sb.rpc('place_order', { p_items:items, p_fulfillment:f, p_delivery_address:address, p_depot_id:depot||null, p_payment_method:checkoutState.payment, p_notes:null })
+  var params={ p_items:items, p_fulfillment:f, p_delivery_address:address, p_depot_id:depot||null, p_payment_method:checkoutState.payment, p_notes:null };
+  var discount=pkgDiscount(); if(discount>0){ params.p_discount_cents=discount; }
+  sb.rpc('place_order', params)
     .then(function(r){
       if(r.error){ btn.disabled=false; btn.textContent='Place order'; alert('Could not place order: '+r.error.message); return; }
       var row=Array.isArray(r.data)?r.data[0]:r.data;
-      cart=[]; saveCart(); catalogueCache=null; // stock changed
+      cart=[]; saveCart(); setPendingPackage(null); catalogueCache=null; // stock changed
       go('#/confirm/'+row.order_id);
     });
 }
@@ -688,7 +701,7 @@ function placeOrder(){
 /* ---------- confirmation + EFT proof upload (distributor) ---------- */
 function viewConfirm(orderId){
   shell('<div id="cf" class="muted">Loading…</div>','');
-  sb.from('orders').select('id,order_number,status,payment_method,payment_status,fulfillment_type,delivery_address,depot_id,delivery_fee_cents,total_cents,order_items(product_name,size_kg,unit_price_cents,qty),payments(id,proof_url)').eq('id',orderId).maybeSingle()
+  sb.from('orders').select('id,order_number,status,payment_method,payment_status,fulfillment_type,delivery_address,depot_id,delivery_fee_cents,discount_cents,total_cents,order_items(product_name,size_kg,unit_price_cents,qty),payments(id,proof_url)').eq('id',orderId).maybeSingle()
     .then(function(r){
       var box=document.getElementById('cf');
       if(r.error||!r.data){ box.innerHTML='<div class="msg err">Order not found.</div>'; return; }
@@ -699,6 +712,7 @@ function viewConfirm(orderId){
         +(o.payment_method==='cash'?'<div class="msg">💵 Please have <b>'+zar(o.total_cents)+'</b> ready to pay on '+(o.fulfillment_type==='collection'?'collection':'delivery')+'.</div>':'')
         +(eftPending?'<div class="msg">🏦 Pay <b>'+zar(o.total_cents)+'</b> by EFT using reference <b>'+esc(o.order_number)+'</b>, then upload your proof.'+(hasProof?'<br>✅ Proof uploaded — awaiting verification.':'<br><label>Upload proof of payment</label><input type="file" id="proof" accept="image/*,application/pdf"><button class="btn btn-sm" id="up" style="margin-top:6px">Upload</button>')+'</div>':'')
         +'<div class="card">'+(o.order_items||[]).map(function(i){return '<div class="sumrow"><span>'+esc(i.product_name)+' '+i.size_kg+'kg × '+i.qty+'</span><b>'+zar(i.unit_price_cents*i.qty)+'</b></div>';}).join('')
+          +(o.discount_cents>0?'<div class="sumrow"><span>Total Discount <span class="muted">(package deal)</span></span><b style="color:var(--green-dark)">− '+zar(o.discount_cents)+'</b></div>':'')
           +'<div class="sumrow"><span>Delivery</span><b>'+zar(o.delivery_fee_cents)+'</b></div><div class="sumrow"><span><b>Total</b></span><b>'+zar(o.total_cents)+'</b></div></div>'
         +'<button class="btn btn-block" data-nav="#/shop" style="margin-top:12px">Continue shopping</button></div>';
       var up=document.getElementById('up'); if(up){ up.addEventListener('click', function(){ var f=document.getElementById('proof').files[0]; if(!f){ alert('Choose a file'); return; } uploadProof(o.id, o.total_cents, o.order_number, f, up); }); }
