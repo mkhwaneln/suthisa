@@ -640,11 +640,14 @@ function viewCheckout(){
   loadCheckoutRefs(function(){
     var f=checkoutState.fulfillment, pay=checkoutState.payment;
     var deliv=f==='delivery'?(settingsCache.default_delivery_fee_cents||0):0;
-    var subtotal=cartSubtotal(), discount=pkgDiscount();
-    var total=subtotal-discount+deliv;
     var pkg=getPendingPackage();
+    var subtotal=cartSubtotal();
+    var hasFixed=!!(pkg && pkg.price_cents>0);
+    var goods=hasFixed?pkg.price_cents:subtotal;           // fixed deal price is what they pay
+    var saving=hasFixed?Math.max(0, subtotal-pkg.price_cents):0;
+    var total=goods+deliv;
     var summaryLines = pkg
-      ? '<div class="sumrow"><span>'+esc(pkg.title||'Package deal')+' × '+cart.reduce(function(a,l){return a+l.qty;},0)+'</span><b>'+zar(subtotal-discount)+'</b></div>'+(discount>0?'<div class="sumrow"><span class="muted">Package saving</span><b style="color:var(--green-dark)">'+zar(discount)+'</b></div>':'')
+      ? '<div class="sumrow"><span>'+esc(pkg.title||'Package deal')+' × '+cart.reduce(function(a,l){return a+l.qty;},0)+'</span><b>'+zar(goods)+'</b></div>'+(saving>0?'<div class="sumrow"><span class="muted">Package saving</span><b style="color:var(--green-dark)">'+zar(saving)+'</b></div>':'')
       : cart.map(function(l){return '<div class="sumrow"><span>'+esc(l.product_name)+' '+l.size_kg+'kg × '+l.qty+'</span><b>'+zar(l.unit_price_cents*l.qty)+'</b></div>';}).join('');
     var addr=[myDistributor.address1,myDistributor.address2,myDistributor.city,myDistributor.province].filter(Boolean).join('\n');
     var name=((myDistributor.name||'')+' '+(myDistributor.surname||'')).trim();
@@ -692,7 +695,7 @@ function placeOrder(){
   if(f==='delivery' && !address){ btn.disabled=false; btn.textContent='Place order'; if(form.address) form.address.focus(); alert('Please enter a delivery address before placing the order.'); return; }
   var params={ p_items:items, p_fulfillment:f, p_delivery_address:address, p_depot_id:depot||null, p_payment_method:checkoutState.payment, p_notes:null };
   var pkg=getPendingPackage();
-  if(pkg){ params.p_is_package=true; params.p_notes=pkg.title||null; var discount=pkgDiscount(); if(discount>0){ params.p_discount_cents=discount; } }
+  if(pkg){ params.p_is_package=true; params.p_notes=pkg.title||null; if(pkg.price_cents>0){ params.p_fixed_subtotal_cents=pkg.price_cents; } }
   sb.rpc('place_order', params)
     .then(function(r){
       if(r.error){ btn.disabled=false; btn.textContent='Place order'; alert('Could not place order: '+r.error.message); return; }
