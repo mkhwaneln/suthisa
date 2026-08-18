@@ -392,31 +392,10 @@ function recalcBuild(dealId){
   if(btn) btn.disabled=!ok;
   if(hint){ hint.textContent = ok?'Ready to submit ✓' : (total>tgt?kgFmt(total-tgt)+' kg over.':kgFmt(tgt-total)+' kg to go.'); }
 }
-function dealOrderHtml(d, items){
-  items=items||[];
-  var rows=items.map(function(it){
-    var q=parseInt(it.qty,10)||0;
-    return '<div class="sumrow"><span>'+kgFmt(it.size_kg)+' kg &nbsp;×&nbsp; <input type="number" min="0" step="1" value="'+q+'" data-oqty data-deal="'+d.id+'" data-kg="'+it.size_kg+'" style="width:76px;display:inline-block"></span><span data-osub data-deal="'+d.id+'" data-kg="'+it.size_kg+'">'+kgFmt(Number(it.size_kg)*q)+' kg</span></div>';
-  }).join('');
-  var total=items.reduce(function(a,it){return a+Number(it.size_kg)*(parseInt(it.qty,10)||0);},0);
-  return '<div class="pkgorder" data-order="'+d.id+'" style="margin-top:10px">'
-    +'<div style="font-weight:700;margin-bottom:6px">Your package <span class="muted" style="font-weight:400">(adjust if needed)</span></div>'
-    +rows
-    +'<div class="sumrow total"><span>Total</span><span data-ototal="'+d.id+'">'+kgFmt(total)+' kg</span></div>'
-    +'<button class="btn btn-block" data-orderpkg="'+d.id+'" style="margin-top:8px">Order Package</button>'
-  +'</div>';
-}
-function recalcOrder(dealId){
-  var root=document.querySelector('[data-order="'+dealId+'"]'); if(!root) return;
-  var qtys=root.querySelectorAll('[data-oqty][data-deal="'+dealId+'"]'), total=0;
-  for(var i=0;i<qtys.length;i++){
-    var kg=parseFloat(qtys[i].getAttribute('data-kg'))||0;
-    var q=parseInt(qtys[i].value||0,10); if(isNaN(q)||q<0) q=0;
-    var line=kg*q; total+=line;
-    var sub=root.querySelector('[data-osub][data-deal="'+dealId+'"][data-kg="'+qtys[i].getAttribute('data-kg')+'"]');
-    if(sub) sub.textContent=kgFmt(line)+' kg';
-  }
-  var totEl=root.querySelector('[data-ototal="'+dealId+'"]'); if(totEl) totEl.textContent=kgFmt(total)+' kg';
+function dealMixHtml(items){
+  items=items||[]; var total=0;
+  var rows=items.map(function(it){ var line=Number(it.size_kg)*Number(it.qty); total+=line; return '<div class="sumrow"><span>'+kgFmt(it.size_kg)+' kg × '+esc(String(it.qty))+'</span><span>'+kgFmt(line)+' kg</span></div>'; }).join('');
+  return '<div style="margin-top:10px"><div style="font-weight:700;margin-bottom:6px">Your package</div>'+rows+'<div class="sumrow total"><span>Total</span><span>'+kgFmt(total)+' kg</span></div></div>';
 }
 function dealBanner(deal){
   if(!deal) return '';
@@ -446,28 +425,27 @@ function viewDeals(){
               ? (reqMap[d.id] && reqMap[d.id].status==='pending'
                    ? '<div class="msg amber" style="margin-top:8px;text-align:center"><b>Pending — awaiting approval</b></div>'
                    : (reqMap[d.id] && reqMap[d.id].status==='approved'
-                        ? dealOrderHtml(d, reqMap[d.id].items)
-                        : '<button class="btn btn-block" data-'+(dealBuildable(d)?'startbuild':'reqdeal')+'="'+d.id+'" style="margin-top:8px">Request this package</button>'))
+                        ? dealMixHtml(reqMap[d.id].items)+'<button class="btn btn-block" data-orderpkg="'+d.id+'" style="margin-top:8px">Order Package</button>'
+                        : (dealBuildable(d)
+                             ? dealBuilderHtml(d)
+                             : '<button class="btn btn-block" data-reqdeal="'+d.id+'" style="margin-top:8px">Request this package</button>')))
               : '<button class="btn btn-block" data-nav="#/login" style="margin-top:8px">Sign in to request</button>')
         +'</div>';
       }).join('')+'<div id="dealmsg"></div>';
       box.addEventListener('input', function(ev){
-        var q=ev.target.closest && ev.target.closest('[data-qty]'); if(q){ recalcBuild(q.getAttribute('data-deal')); return; }
-        var oq=ev.target.closest && ev.target.closest('[data-oqty]'); if(oq) recalcOrder(oq.getAttribute('data-deal'));
+        var q=ev.target.closest && ev.target.closest('[data-qty]'); if(q) recalcBuild(q.getAttribute('data-deal'));
       });
       box.addEventListener('click', function(ev){
         var n=ev.target.closest && ev.target.closest('[data-nav]'); if(n){ go(n.getAttribute('data-nav')); return; }
         var op=ev.target.closest && ev.target.closest('[data-orderpkg]');
         if(op){
-          var odid=op.getAttribute('data-orderpkg'), oroot=document.querySelector('[data-order="'+odid+'"]');
-          var oqtys=oroot?oroot.querySelectorAll('[data-oqty][data-deal="'+odid+'"]'):[], oitems=[];
-          for(var k=0;k<oqtys.length;k++){ var okg=parseFloat(oqtys[k].getAttribute('data-kg'))||0, oq2=parseInt(oqtys[k].value||0,10); if(oq2>0){ oitems.push({size_kg:okg, qty:oq2}); } }
-          if(!oitems.length){ document.getElementById('dealmsg').innerHTML='<div class="msg err">Set at least one quantity to order.</div>'; return; }
+          var odid=op.getAttribute('data-orderpkg'), oreq=reqMap[odid];
+          if(!oreq || !oreq.items || !oreq.items.length){ document.getElementById('dealmsg').innerHTML='<div class="msg err">This package has no items to order.</div>'; return; }
           op.disabled=true; op.textContent='Adding…';
           loadCatalogueData(function(products, err){
             if(err){ op.disabled=false; op.textContent='Order Package'; document.getElementById('dealmsg').innerHTML='<div class="msg err">Could not load products: '+esc(err.message)+'</div>'; return; }
             var missing=[];
-            oitems.forEach(function(it){
+            oreq.items.forEach(function(it){
               var fv=null, fp=null;
               products.forEach(function(p){ (p.product_variants||[]).forEach(function(v){ if(Number(v.size_kg)===Number(it.size_kg)){ fv=v; fp=p; } }); });
               if(fv){ addToCart(fv, fp, it.qty); } else { missing.push(it.size_kg); }
@@ -477,8 +455,6 @@ function viewDeals(){
           });
           return;
         }
-        var bstart=ev.target.closest && ev.target.closest('[data-startbuild]');
-        if(bstart){ var bid=bstart.getAttribute('data-startbuild'), bd=active.filter(function(x){return x.id===bid;})[0]; if(bd) bstart.outerHTML=dealBuilderHtml(bd); return; }
         var sd=ev.target.closest && ev.target.closest('[data-submitdeal]');
         if(sd){
           var did=sd.getAttribute('data-submitdeal'), root=document.querySelector('[data-build="'+did+'"]');
