@@ -802,8 +802,12 @@ function showOrderModal(orderId){
       var box=host.querySelector('.modal-box');
       if(r.error||!r.data){ box.innerHTML='<div class="msg err">Could not load order'+(r.error?': '+esc(r.error.message):'')+'</div><button class="btn btn-block" data-close style="margin-top:10px">Close</button>'; return; }
       var o=r.data, d=o.distributors||{};
+      var pkgFixed=(o.total_cents||0)-(o.delivery_fee_cents||0), pkgReg=pkgFixed+(o.discount_cents||0);
+      var itemsHtml = o.is_package
+        ? '<div class="sumrow"><span>'+esc(o.notes||'Package deal')+' × 1</span><b>'+zar(pkgFixed)+'</b></div>'+(o.discount_cents>0?'<div class="sumrow"><span class="muted">Discount <span style="font-size:12px">(vs. '+zar(pkgReg)+' regular)</span></span><b style="color:var(--green-dark)">'+zar(o.discount_cents)+'</b></div>':'')
+        : (o.order_items||[]).map(function(i){return '<div class="sumrow"><span>'+esc(i.product_name)+' '+i.size_kg+'kg × '+i.qty+'</span><b>'+zar(i.unit_price_cents*i.qty)+'</b></div>';}).join('');
       box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div class="h1" style="margin:0">Order '+esc(o.order_number)+'</div><button class="btn btn-ghost btn-sm" data-close>✕</button></div>'
-        +'<p class="sub">Placed '+esc(String(o.placed_at||'').slice(0,16).replace('T',' '))+' · <span class="pill">'+esc(titleCase(o.status))+'</span></p>'
+        +'<p class="sub">Placed '+esc(String(o.placed_at||'').slice(0,16).replace('T',' '))+' · <span class="pill">'+esc(titleCase(o.status))+'</span>'+(o.is_package?' · <span class="pill" style="background:var(--yellow);color:var(--green-dark)">Package deal</span>':'')+'</p>'
         +(me.role==='admin'?'<div class="card" style="margin-top:0"><b>Distributor</b>'
           +'<div class="sumrow"><span class="muted">Name</span><b>'+esc(((d.name||'')+' '+(d.surname||'')).trim())+'</b></div>'
           +'<div class="sumrow"><span class="muted">Login</span><b>'+esc(d.login_name||'')+'</b></div>'
@@ -817,14 +821,14 @@ function showOrderModal(orderId){
              : '<div class="sumrow"><span class="muted">Collect at</span><b style="text-align:right;max-width:62%">'+esc(o.depots?((o.depots.name||'')+(o.depots.address?' — '+o.depots.address:'')):'—')+'</b></div>')
         +'</div>'
         +'<div class="card" style="margin-top:10px"><b>Items</b>'
-          +(o.order_items||[]).map(function(i){return '<div class="sumrow"><span>'+esc(i.product_name)+' '+i.size_kg+'kg × '+i.qty+'</span><b>'+zar(i.unit_price_cents*i.qty)+'</b></div>';}).join('')
+          +itemsHtml
           +'<div class="sumrow"><span>Delivery</span><b>'+zar(o.delivery_fee_cents)+'</b></div>'
           +'<div class="sumrow total"><span>Total</span><b>'+zar(o.total_cents)+'</b></div>'
         +'</div>'
         +'<div class="card" style="margin-top:10px"><b>Payment</b>'
           +'<div class="sumrow"><span class="muted">Method</span><b>'+esc(payLabel(o.payment_method))+'</b></div>'
           +'<div class="sumrow"><span class="muted">Status</span><b>'+esc(titleCase(o.payment_status))+'</b></div>'
-          +(o.notes?'<div class="sumrow"><span class="muted">Notes</span><b>'+esc(o.notes)+'</b></div>':'')
+          +(o.notes && !o.is_package?'<div class="sumrow"><span class="muted">Notes</span><b>'+esc(o.notes)+'</b></div>':'')
         +'</div>'
         +'<button class="btn btn-block" data-close style="margin-top:12px">Close</button>';
     });
