@@ -407,7 +407,7 @@ function viewDeals(){
     var box=document.getElementById('deals');
     var active=(deals||[]).filter(function(d){return d.is_active;});
     if(!active.length){ box.innerHTML='<div class="msg">No package deals available right now.</div>'; wireNav(); return; }
-    function draw(pending){
+    function draw(reqMap){
       box.innerHTML=active.map(function(d){
         return '<div class="card" style="border:2px solid var(--yellow);margin-bottom:14px">'
           +'<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="font-size:42px">🚛</div>'
@@ -417,11 +417,13 @@ function viewDeals(){
           +(d.description?'<div class="msg">'+esc(d.description).replace(/\n/g,'<br>')+'</div>':'')
           +(d.example?'<div class="msg" style="text-align:left"><b>Example combination</b>'+String(d.example).split('\n').filter(function(x){return x.trim();}).map(function(x){x=x.trim();return /^(…|\.\.\.|or\b)/i.test(x)?'<br><span class="muted">'+esc(x)+'</span>':'<br>• '+esc(x);}).join('')+'</div>':'')
           +(me.user
-              ? (pending[d.id]
+              ? (reqMap[d.id] && reqMap[d.id].status==='pending'
                    ? '<div class="msg amber" style="margin-top:8px;text-align:center"><b>Pending — awaiting approval</b></div>'
-                   : (dealBuildable(d)
-                        ? dealBuilderHtml(d)
-                        : '<button class="btn btn-block" data-reqdeal="'+d.id+'" style="margin-top:8px">Request this package</button>'))
+                   : (reqMap[d.id] && reqMap[d.id].status==='approved'
+                        ? '<button class="btn btn-block" data-orderpkg="'+d.id+'" style="margin-top:8px">Order Package</button>'
+                        : (dealBuildable(d)
+                             ? dealBuilderHtml(d)
+                             : '<button class="btn btn-block" data-reqdeal="'+d.id+'" style="margin-top:8px">Request this package</button>')))
               : '<button class="btn btn-block" data-nav="#/login" style="margin-top:8px">Sign in to request</button>')
         +'</div>';
       }).join('')+'<div id="dealmsg"></div>';
@@ -430,6 +432,24 @@ function viewDeals(){
       });
       box.addEventListener('click', function(ev){
         var n=ev.target.closest && ev.target.closest('[data-nav]'); if(n){ go(n.getAttribute('data-nav')); return; }
+        var op=ev.target.closest && ev.target.closest('[data-orderpkg]');
+        if(op){
+          var odid=op.getAttribute('data-orderpkg'), oreq=reqMap[odid];
+          if(!oreq || !oreq.items || !oreq.items.length){ document.getElementById('dealmsg').innerHTML='<div class="msg err">This package has no items to order.</div>'; return; }
+          op.disabled=true; op.textContent='Adding…';
+          loadCatalogueData(function(products, err){
+            if(err){ op.disabled=false; op.textContent='Order Package'; document.getElementById('dealmsg').innerHTML='<div class="msg err">Could not load products: '+esc(err.message)+'</div>'; return; }
+            var missing=[];
+            oreq.items.forEach(function(it){
+              var fv=null, fp=null;
+              products.forEach(function(p){ (p.product_variants||[]).forEach(function(v){ if(Number(v.size_kg)===Number(it.size_kg)){ fv=v; fp=p; } }); });
+              if(fv){ addToCart(fv, fp, it.qty); } else { missing.push(it.size_kg); }
+            });
+            if(missing.length){ document.getElementById('dealmsg').innerHTML='<div class="msg err">Some sizes are no longer available ('+missing.join(', ')+' kg) — the rest were added to your cart.</div>'; }
+            go('#/cart');
+          });
+          return;
+        }
         var sd=ev.target.closest && ev.target.closest('[data-submitdeal]');
         if(sd){
           var did=sd.getAttribute('data-submitdeal'), root=document.querySelector('[data-build="'+did+'"]');
@@ -452,9 +472,9 @@ function viewDeals(){
       wireNav();
     }
     if(me.user){
-      sb.from('deal_requests').select('deal_id').eq('status','pending').then(function(rr){
-        var set={}; (rr.data||[]).forEach(function(x){ if(x.deal_id) set[x.deal_id]=true; });
-        draw(set);
+      sb.from('deal_requests').select('deal_id,status,items,created_at').in('status',['pending','approved']).order('created_at',{ascending:false}).then(function(rr){
+        var map={}; (rr.data||[]).forEach(function(x){ if(x.deal_id && !map[x.deal_id]) map[x.deal_id]={status:x.status, items:x.items||[]}; });
+        draw(map);
       });
     } else { draw({}); }
   });
