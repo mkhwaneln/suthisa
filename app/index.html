@@ -471,14 +471,14 @@ function viewDeal(id){
           op.disabled=true; op.textContent='Adding…';
           loadCatalogueData(function(products, err){
             if(err){ op.disabled=false; op.textContent='Order Package'; document.getElementById('dealmsg').innerHTML='<div class="msg err">Could not load products: '+esc(err.message)+'</div>'; return; }
-            var missing=[];
+            var added=0;
             req.items.forEach(function(it){
               var fv=null, fp=null;
               products.forEach(function(p){ (p.product_variants||[]).forEach(function(v){ if(Number(v.size_kg)===Number(it.size_kg)){ fv=v; fp=p; } }); });
-              if(fv){ addToCart(fv, fp, it.qty); } else { missing.push(it.size_kg); }
+              if(fv){ addToCart(fv, fp, it.qty); added++; }
             });
-            if(missing.length){ document.getElementById('dealmsg').innerHTML='<div class="msg err">Some sizes are no longer available ('+missing.join(', ')+' kg) — the rest were added to your cart.</div>'; }
-            go('#/cart');
+            if(!added){ op.disabled=false; op.textContent='Order Package'; document.getElementById('dealmsg').innerHTML='<div class="msg err">None of this package\'s sizes are available right now.</div>'; return; }
+            go('#/checkout');
           });
           return;
         }
