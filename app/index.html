@@ -117,7 +117,7 @@ var distributorApproved=null;
 function cartKey(){ return 'suthisa-app-cart-'+(me.user?me.user.id:'anon'); }
 function loadCart(){ try{ cart=JSON.parse(localStorage.getItem(cartKey()))||[]; }catch(e){ cart=[]; } }
 function saveCart(){ try{ localStorage.setItem(cartKey(), JSON.stringify(cart)); }catch(e){} }
-function cartCount(){ return cart.reduce(function(a,l){return a+l.qty;},0); }
+function cartCount(){ return getPendingPackage() ? 1 : cart.reduce(function(a,l){return a+l.qty;},0); }
 function cartSubtotal(){ return cart.reduce(function(a,l){return a+l.unit_price_cents*l.qty;},0); }
 // package-deal context: a fixed price (cents) that discounts the cart to the admin's deal price
 function parsePriceCents(text){ var dg=String(text==null?'':text).replace(/[^\d]/g,''); return dg?parseInt(dg,10)*100:0; }
