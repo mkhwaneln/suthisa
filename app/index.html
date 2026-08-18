@@ -598,20 +598,27 @@ function setCartQty(vid, d){ var l=cart.filter(function(x){return x.variant_id==
 function removeCartLine(vid){ cart=cart.filter(function(x){return x.variant_id!==vid;}); setPendingPackage(null); saveCart(); viewCart(); }
 function viewCart(){
   if(!cart.length){ shell('<div class="h1">Your cart</div><div class="msg">Your cart is empty. <button class="btn btn-sm" data-nav="#/shop">Browse products</button></div>','cart'); wireNav(); return; }
-  var rows=cart.map(function(l){ return '<tr><td><b>'+esc(l.product_name)+'</b><br><span class="muted">'+l.size_kg+' kg · wholesale</span></td>'
-    +'<td>'+zar(l.unit_price_cents)+'</td>'
-    +'<td><button class="btn btn-ghost btn-sm" data-cq="-1" data-vid="'+l.variant_id+'">−</button> '+l.qty+' <button class="btn btn-ghost btn-sm" data-cq="1" data-vid="'+l.variant_id+'">+</button></td>'
-    +'<td><b>'+zar(l.unit_price_cents*l.qty)+'</b></td>'
-    +'<td><button class="btn btn-ghost btn-sm" data-rm="'+l.variant_id+'">Remove</button></td></tr>'; }).join('');
+  var pkg=getPendingPackage();
+  var subtotal=(pkg && pkg.price_cents>0)?pkg.price_cents:cartSubtotal();
+  var rows = pkg
+    ? '<tr><td><b>'+esc(pkg.title||'Package deal')+'</b><br><span class="muted">Package deal</span></td>'
+        +'<td>'+zar(subtotal)+'</td><td>1</td><td><b>'+zar(subtotal)+'</b></td>'
+        +'<td><button class="btn btn-ghost btn-sm" data-rmpkg="1">Remove</button></td></tr>'
+    : cart.map(function(l){ return '<tr><td><b>'+esc(l.product_name)+'</b><br><span class="muted">'+l.size_kg+' kg · wholesale</span></td>'
+        +'<td>'+zar(l.unit_price_cents)+'</td>'
+        +'<td><button class="btn btn-ghost btn-sm" data-cq="-1" data-vid="'+l.variant_id+'">−</button> '+l.qty+' <button class="btn btn-ghost btn-sm" data-cq="1" data-vid="'+l.variant_id+'">+</button></td>'
+        +'<td><b>'+zar(l.unit_price_cents*l.qty)+'</b></td>'
+        +'<td><button class="btn btn-ghost btn-sm" data-rm="'+l.variant_id+'">Remove</button></td></tr>'; }).join('');
   shell('<div class="h1">Your cart</div>'
     +'<div class="tablewrap"><table><thead><tr><th>Item</th><th>Unit</th><th>Qty</th><th>Line</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
     +'<div class="card" style="max-width:340px;margin-left:auto;margin-top:12px">'
-    +'<div class="sumrow"><span>Subtotal</span><b>'+zar(cartSubtotal())+'</b></div>'
+    +'<div class="sumrow"><span>Subtotal</span><b>'+zar(subtotal)+'</b></div>'
     +'<div class="sumrow"><span>VAT (zero-rated)</span><b>'+zar(0)+'</b></div>'
     +'<button class="btn btn-block" data-nav="#/checkout" style="margin-top:8px">Checkout</button>'
     +'<p class="muted" style="text-align:center">+ delivery fee if delivered</p></div>','cart');
   var m=document.getElementById('main');
   m.addEventListener('click', function(ev){
+    var rp=ev.target.closest('[data-rmpkg]'); if(rp){ cart=[]; setPendingPackage(null); saveCart(); viewCart(); return; }
     var q=ev.target.closest('[data-cq]'); if(q){ setCartQty(q.getAttribute('data-vid'), parseInt(q.getAttribute('data-cq'),10)); return; }
     var rm=ev.target.closest('[data-rm]'); if(rm){ removeCartLine(rm.getAttribute('data-rm')); return; }
     var n=ev.target.closest('[data-nav]'); if(n){ go(n.getAttribute('data-nav')); }
