@@ -707,6 +707,7 @@ function placeOrder(){
     .then(function(r){
       if(r.error){ btn.disabled=false; btn.textContent='Place order'; alert('Could not place order: '+r.error.message); return; }
       var row=Array.isArray(r.data)?r.data[0]:r.data;
+      if(pkg){ sb.rpc('mark_deal_ordered', { p_deal_id: pkg.deal_id }); } // approved deal -> ordered (drops the Shop panel)
       cart=[]; saveCart(); setPendingPackage(null); catalogueCache=null; // stock changed
       go('#/confirm/'+row.order_id);
     });
