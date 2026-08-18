@@ -356,9 +356,9 @@ function loadCatalogueData(cb){
 }
 var dealsCache=null;
 function loadDeals(cb){
-  if(dealsCache){ return cb(dealsCache); }
+  // always fetch fresh so DB edits/deletes reflect without a reload
   sb.from('deals').select('*').order('sort_order').order('title')
-    .then(function(r){ dealsCache = r.error ? [] : (r.data||[]); cb(dealsCache); });
+    .then(function(r){ cb(r.error ? [] : (r.data||[])); });
 }
 function kgFmt(n){ n=Number(n)||0; var s=(Math.round(n*100)/100).toString().split('.'); s[0]=s[0].replace(/\B(?=(\d{3})+(?!\d))/g,' '); return s.join('.'); }
 function dealBuildable(d){ return d && d.target_kg!=null && (d.allowed_sizes||[]).length>0; }
