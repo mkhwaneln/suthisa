@@ -392,6 +392,11 @@ function recalcBuild(dealId){
   if(btn) btn.disabled=!ok;
   if(hint){ hint.textContent = ok?'Ready to submit ✓' : (total>tgt?kgFmt(total-tgt)+' kg over.':kgFmt(tgt-total)+' kg to go.'); }
 }
+function dealMixHtml(items){
+  items=items||[]; var total=0;
+  var rows=items.map(function(it){ total+=Number(it.size_kg)*Number(it.qty); return '<br>'+kgFmt(it.size_kg)+' kg × '+esc(String(it.qty)); }).join('');
+  return '<div class="msg" style="text-align:left;margin-top:8px"><b>Your package</b>'+rows+(total?'<br><b>Total '+kgFmt(total)+' kg</b>':'')+'</div>';
+}
 function dealBanner(deal){
   if(!deal) return '';
   return '<div class="card" data-open-deal="1" style="cursor:pointer;border:2px solid var(--yellow);background:#fffde7;display:flex;align-items:center;gap:12px;margin-bottom:14px">'
@@ -420,10 +425,8 @@ function viewDeals(){
               ? (reqMap[d.id] && reqMap[d.id].status==='pending'
                    ? '<div class="msg amber" style="margin-top:8px;text-align:center"><b>Pending — awaiting approval</b></div>'
                    : (reqMap[d.id] && reqMap[d.id].status==='approved'
-                        ? '<button class="btn btn-block" data-orderpkg="'+d.id+'" style="margin-top:8px">Order Package</button>'
-                        : (dealBuildable(d)
-                             ? dealBuilderHtml(d)
-                             : '<button class="btn btn-block" data-reqdeal="'+d.id+'" style="margin-top:8px">Request this package</button>')))
+                        ? dealMixHtml(reqMap[d.id].items)+'<button class="btn btn-block" data-orderpkg="'+d.id+'" style="margin-top:8px">Order Package</button>'
+                        : '<button class="btn btn-block" data-'+(dealBuildable(d)?'startbuild':'reqdeal')+'="'+d.id+'" style="margin-top:8px">Request this package</button>'))
               : '<button class="btn btn-block" data-nav="#/login" style="margin-top:8px">Sign in to request</button>')
         +'</div>';
       }).join('')+'<div id="dealmsg"></div>';
@@ -450,6 +453,8 @@ function viewDeals(){
           });
           return;
         }
+        var bstart=ev.target.closest && ev.target.closest('[data-startbuild]');
+        if(bstart){ var bid=bstart.getAttribute('data-startbuild'), bd=active.filter(function(x){return x.id===bid;})[0]; if(bd) bstart.outerHTML=dealBuilderHtml(bd); return; }
         var sd=ev.target.closest && ev.target.closest('[data-submitdeal]');
         if(sd){
           var did=sd.getAttribute('data-submitdeal'), root=document.querySelector('[data-build="'+did+'"]');
