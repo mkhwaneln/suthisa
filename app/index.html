@@ -254,7 +254,7 @@ function shell(inner, view){
 
 function loadCatalogue(){
   shell('<div class="h1">Products &amp; stock</div><p class="sub">Edit names, sizes, prices (R) and stock — changes save automatically. Add or remove products and sizes below.</p><div id="cat" class="muted">Loading catalogue…</div>', 'catalogue');
-  sb.from('products').select('id,name,category,product_variants(id,size_kg,wholesale_price_cents,retail_price_cents,stock_qty,low_stock_threshold)').order('name')
+  sb.from('products').select('id,name,category,unit,product_variants(id,size_kg,wholesale_price_cents,retail_price_cents,stock_qty,low_stock_threshold)').order('name')
     .then(function(r){
       var cat=document.getElementById('cat');
       if(r.error){ cat.innerHTML='<div class="msg err">Could not load products: '+esc(r.error.message)+'</div>'; return; }
@@ -265,7 +265,7 @@ function loadCatalogue(){
         var rows=variants.map(function(v){
           var low=v.stock_qty<=(v.low_stock_threshold==null?10:v.low_stock_threshold);
           return '<tr>'
-            +'<td><input type="number" min="1" step="0.5" class="stock" data-f="size_kg" data-id="'+v.id+'" value="'+v.size_kg+'"> kg</td>'
+            +'<td><input type="number" min="1" step="0.5" class="stock" data-f="size_kg" data-id="'+v.id+'" value="'+v.size_kg+'"> '+esc(p.unit||'kg')+'</td>'
             +'<td>R <input type="number" min="0" step="0.01" data-f="wholesale_price_cents" data-id="'+v.id+'" value="'+(v.wholesale_price_cents/100).toFixed(2)+'"></td>'
             +'<td>R <input type="number" min="0" step="0.01" data-f="retail_price_cents" data-id="'+v.id+'" value="'+(v.retail_price_cents/100).toFixed(2)+'"></td>'
             +'<td><input type="number" min="0" class="stock" data-f="stock_qty" data-id="'+v.id+'" value="'+v.stock_qty+'"> '+(low?'<span class="pill '+(v.stock_qty<=0?'red':'amber')+'">low</span>':'')+'</td>'
@@ -275,7 +275,8 @@ function loadCatalogue(){
         return '<div class="card" style="margin-bottom:14px">'
           +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
             +'<input type="text" data-pf="name" data-pid="'+p.id+'" value="'+esc(p.name)+'" style="font-weight:700;max-width:220px" placeholder="Product name">'
-            +'<input type="text" data-pf="category" data-pid="'+p.id+'" value="'+esc(p.category||'')+'" style="max-width:160px" placeholder="Category">'
+            +'<input type="text" data-pf="category" data-pid="'+p.id+'" value="'+esc(p.category||'')+'" style="max-width:150px" placeholder="Category">'
+            +'<input type="text" data-pf="unit" data-pid="'+p.id+'" value="'+esc(p.unit||'kg')+'" style="max-width:90px" placeholder="Unit" title="Unit (kg, ml, eggs…)">'
             +'<div style="flex:1"></div>'
             +'<button class="btn btn-ghost btn-sm" data-delprod="'+p.id+'"'+(onlyOne?' disabled title="At least one product is required"':'')+' style="border-color:var(--red);color:var(--red)">Delete product</button>'
           +'</div>'
@@ -286,6 +287,7 @@ function loadCatalogue(){
       +'<div class="card" style="max-width:520px"><b>Add a product</b>'
         +'<label>Name</label><input type="text" id="npname" placeholder="e.g. Maize Meal">'
         +'<label>Category</label><input type="text" id="npcat" placeholder="Maize Meal">'
+        +'<label>Unit <span class="muted">(kg, ml, eggs, pack…)</span></label><input type="text" id="npunit" value="kg" placeholder="kg">'
         +'<button class="btn" id="npadd" style="margin-top:10px">Add product</button></div><div id="savemsg"></div>';
       function msg(html){ var m=document.getElementById('savemsg'); if(!m) return; m.innerHTML=html; if(html) setTimeout(function(){ if(m) m.innerHTML=''; }, 2500); }
       cat.addEventListener('change', function(ev){
@@ -293,6 +295,7 @@ function loadCatalogue(){
         if(el.getAttribute && el.getAttribute('data-pf')){   // product name / category
           var pv=(el.value||'').trim();
           if(el.getAttribute('data-pf')==='name' && !pv){ msg('<div class="msg err">Name cannot be empty.</div>'); loadCatalogue(); return; }
+          if(el.getAttribute('data-pf')==='unit' && !pv){ pv='kg'; el.value='kg'; }
           var pp={}; pp[el.getAttribute('data-pf')]=pv; el.disabled=true;
           sb.from('products').update(pp).eq('id', el.getAttribute('data-pid')).then(function(rr){ el.disabled=false; msg(rr.error?'<div class="msg err">Save failed: '+esc(rr.error.message)+'</div>':'<div class="msg ok">Saved ✓</div>'); });
           return;
@@ -308,20 +311,20 @@ function loadCatalogue(){
       });
       cat.addEventListener('click', function(ev){
         var as=ev.target.closest && ev.target.closest('[data-addsize]');
-        if(as){ var kg=prompt('New size in kg (e.g. 25):'); if(kg===null) return; kg=parseFloat(kg); if(!kg||kg<=0){ msg('<div class="msg err">Enter a valid size in kg.</div>'); return; }
+        if(as){ var prod=products.filter(function(x){return x.id===as.getAttribute('data-addsize');})[0], pu=(prod&&prod.unit)||'kg'; var kg=prompt('New size in '+pu+' (e.g. 25):'); if(kg===null) return; kg=parseFloat(kg); if(!kg||kg<=0){ msg('<div class="msg err">Enter a valid size in '+esc(pu)+'.</div>'); return; }
           sb.from('product_variants').insert({product_id:as.getAttribute('data-addsize'), size_kg:kg, wholesale_price_cents:0, retail_price_cents:0, stock_qty:0}).then(function(rr){ msg(rr.error?'<div class="msg err">Add size failed (that size may already exist): '+esc(rr.error.message)+'</div>':''); if(!rr.error) loadCatalogue(); }); return; }
         var dv=ev.target.closest && ev.target.closest('[data-delvar]');
         if(dv){ if(!confirm('Remove this size?')) return; sb.from('product_variants').delete().eq('id', dv.getAttribute('data-delvar')).then(function(rr){ if(rr.error){ msg('<div class="msg err">Remove failed (it may be used by an existing order): '+esc(rr.error.message)+'</div>'); return; } loadCatalogue(); }); return; }
         var dp=ev.target.closest && ev.target.closest('[data-delprod]');
         if(dp){ if(!confirm('Delete this product and all its sizes?')) return; sb.from('products').delete().eq('id', dp.getAttribute('data-delprod')).then(function(rr){ if(rr.error){ msg('<div class="msg err">Delete failed (it may be used by an existing order): '+esc(rr.error.message)+'</div>'); return; } loadCatalogue(); }); return; }
-        if(ev.target.id==='npadd'){ var n=(document.getElementById('npname').value||'').trim(), c=(document.getElementById('npcat').value||'').trim()||'Maize Meal'; if(!n){ msg('<div class="msg err">Product name is required.</div>'); return; } ev.target.disabled=true; sb.from('products').insert({name:n, category:c}).then(function(rr){ ev.target.disabled=false; if(rr.error){ msg('<div class="msg err">Add failed: '+esc(rr.error.message)+'</div>'); return; } loadCatalogue(); }); return; }
+        if(ev.target.id==='npadd'){ var n=(document.getElementById('npname').value||'').trim(), c=(document.getElementById('npcat').value||'').trim()||'Maize Meal'; if(!n){ msg('<div class="msg err">Product name is required.</div>'); return; } var u=(document.getElementById('npunit').value||'').trim()||'kg'; ev.target.disabled=true; sb.from('products').insert({name:n, category:c, unit:u}).then(function(rr){ ev.target.disabled=false; if(rr.error){ msg('<div class="msg err">Add failed: '+esc(rr.error.message)+'</div>'); return; } loadCatalogue(); }); return; }
       });
     });
 }
 /* ---------- stock-taker admin (stock quantities only) ---------- */
 function loadStock(){
   shell('<div class="h1">Stock take</div><p class="sub">Update stock quantities only — prices are managed by an admin. Changes save automatically.</p><div id="stk" class="muted">Loading…</div>', 'stock');
-  sb.from('products').select('id,name,product_variants(id,size_kg,stock_qty,low_stock_threshold)').order('name')
+  sb.from('products').select('id,name,unit,product_variants(id,size_kg,stock_qty,low_stock_threshold)').order('name')
     .then(function(r){
       var box=document.getElementById('stk');
       if(r.error){ box.innerHTML='<div class="msg err">Could not load stock: '+esc(r.error.message)+'</div>'; return; }
@@ -331,7 +334,7 @@ function loadStock(){
         var variants=(p.product_variants||[]).slice().sort(function(a,b){return a.size_kg-b.size_kg;});
         var rows=variants.map(function(v){
           var low=v.stock_qty<=(v.low_stock_threshold==null?10:v.low_stock_threshold);
-          return '<tr><td>'+v.size_kg+' kg</td><td><input type="number" min="0" class="stock" data-id="'+v.id+'" value="'+v.stock_qty+'"> '+(low?'<span class="pill '+(v.stock_qty<=0?'red':'amber')+'">low</span>':'')+'</td></tr>';
+          return '<tr><td>'+v.size_kg+' '+esc(p.unit||'kg')+'</td><td><input type="number" min="0" class="stock" data-id="'+v.id+'" value="'+v.stock_qty+'"> '+(low?'<span class="pill '+(v.stock_qty<=0?'red':'amber')+'">low</span>':'')+'</td></tr>';
         }).join('')||'<tr><td colspan="2" class="muted">No sizes.</td></tr>';
         return '<div class="card" style="margin-bottom:14px"><b>'+esc(p.name)+'</b><div class="tablewrap"><table><thead><tr><th>Size</th><th>Stock</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
       }).join('')+'<div id="savemsg"></div>';
@@ -353,7 +356,7 @@ function loadStock(){
 var catalogueCache=null, detailSel={};
 function loadCatalogueData(cb){
   if(catalogueCache){ return cb(catalogueCache); }
-  sb.from('products').select('id,name,category,description,product_variants(id,size_kg,wholesale_price_cents,stock_qty,low_stock_threshold)')
+  sb.from('products').select('id,name,category,description,unit,product_variants(id,size_kg,wholesale_price_cents,stock_qty,low_stock_threshold)')
     .eq('is_active',true).order('name').then(function(r){
       if(r.error){ cb(null, r.error); return; }
       (r.data||[]).forEach(function(p){ (p.product_variants||[]).sort(function(a,b){return a.size_kg-b.size_kg;}); });
@@ -531,8 +534,8 @@ function viewShop(){
           return '<div class="card product" data-open="'+p.id+'" style="cursor:pointer">'
             +'<div class="pimg"><img src="'+MAIZE_ICON+'" alt="Maize meal"></div>'
             +'<div class="pcat">'+esc(p.category||'')+'</div><div class="pname">'+esc(p.name)+'</div>'
-            +'<div class="psize">from '+v.size_kg+' kg</div>'
-            +'<div class="pprice">'+zar(v.wholesale_price_cents)+' <span class="muted">/ '+v.size_kg+'kg</span></div>'
+            +'<div class="psize">from '+v.size_kg+' '+esc(p.unit||'kg')+'</div>'
+            +'<div class="pprice">'+zar(v.wholesale_price_cents)+' <span class="muted">/ '+v.size_kg+' '+esc(p.unit||'kg')+'</span></div>'
             +'<button class="btn btn-sm btn-block" data-open="'+p.id+'" style="margin-top:8px">View sizes</button></div>';
         }).join('')+'</div>'
       : '<div class="msg">No products yet.</div>';
@@ -567,11 +570,11 @@ function viewProduct(id){
     var v=p.product_variants.filter(function(x){return x.id===sel.variantId;})[0]||p.product_variants[0];
     var thr=(v.low_stock_threshold==null?10:v.low_stock_threshold);
     var badge=v.stock_qty<=0?'<span class="pill red">Out of stock</span>':(v.stock_qty<=thr?'<span class="pill amber">Low — '+v.stock_qty+' left</span>':'<span class="pill">In stock</span>');
-    var sizes=p.product_variants.map(function(x){ var out=x.stock_qty<=0; return '<button class="tab'+(x.id===sel.variantId?' active':'')+'" data-size="'+x.id+'"'+(out?' disabled':'')+'>'+x.size_kg+' kg'+(out?' (out)':'')+'</button>'; }).join('');
+    var sizes=p.product_variants.map(function(x){ var out=x.stock_qty<=0; return '<button class="tab'+(x.id===sel.variantId?' active':'')+'" data-size="'+x.id+'"'+(out?' disabled':'')+'>'+x.size_kg+' '+esc(p.unit||'kg')+(out?' (out)':'')+'</button>'; }).join('');
     shell('<button class="btn btn-ghost btn-sm" data-nav="#/shop">‹ Back to shop</button>'
       +'<div class="pimg detail" style="margin-top:8px"><img src="'+MAIZE_ICON+'" alt="Maize meal"></div>'
       +'<div class="h1" style="margin-top:12px">'+esc(p.name)+'</div><p class="sub">'+esc(p.description||'')+'</p>'
-      +'<label>Size (KG)</label><div class="nav">'+sizes+'</div>'
+      +'<label>Size</label><div class="nav">'+sizes+'</div>'
       +'<div class="pprice" style="margin:12px 0">'+zar(v.wholesale_price_cents)+' <span class="role">WHOLESALE</span></div>'
       +'<div style="margin:8px 0">'+badge+'</div>'
       +(me.user
@@ -589,7 +592,7 @@ function viewProduct(id){
 }
 function addToCart(v, p, qty){
   var line=cart.filter(function(l){return l.variant_id===v.id;})[0];
-  if(line){ line.qty+=qty; } else { cart.push({variant_id:v.id, product_id:p.id, product_name:p.name, size_kg:v.size_kg, unit_price_cents:v.wholesale_price_cents, qty:qty}); }
+  if(line){ line.qty+=qty; } else { cart.push({variant_id:v.id, product_id:p.id, product_name:p.name, size_kg:v.size_kg, unit:p.unit||'kg', unit_price_cents:v.wholesale_price_cents, qty:qty}); }
   saveCart();
 }
 
@@ -604,7 +607,7 @@ function viewCart(){
     ? '<tr><td><b>'+esc(pkg.title||'Package deal')+'</b><br><span class="muted">Package deal</span></td>'
         +'<td>'+zar(subtotal)+'</td><td>1</td><td><b>'+zar(subtotal)+'</b></td>'
         +'<td><button class="btn btn-ghost btn-sm" data-rmpkg="1">Remove</button></td></tr>'
-    : cart.map(function(l){ return '<tr><td><b>'+esc(l.product_name)+'</b><br><span class="muted">'+l.size_kg+' kg · wholesale</span></td>'
+    : cart.map(function(l){ return '<tr><td><b>'+esc(l.product_name)+'</b><br><span class="muted">'+l.size_kg+' '+esc(l.unit||'kg')+' · wholesale</span></td>'
         +'<td>'+zar(l.unit_price_cents)+'</td>'
         +'<td><button class="btn btn-ghost btn-sm" data-cq="-1" data-vid="'+l.variant_id+'">−</button> '+l.qty+' <button class="btn btn-ghost btn-sm" data-cq="1" data-vid="'+l.variant_id+'">+</button></td>'
         +'<td><b>'+zar(l.unit_price_cents*l.qty)+'</b></td>'
@@ -655,7 +658,7 @@ function viewCheckout(){
     var total=goods+deliv;
     var summaryLines = pkg
       ? '<div class="sumrow"><span>'+esc(pkg.title||'Package deal')+' × 1</span><b>'+zar(goods)+'</b></div>'
-      : cart.map(function(l){return '<div class="sumrow"><span>'+esc(l.product_name)+' '+l.size_kg+'kg × '+l.qty+'</span><b>'+zar(l.unit_price_cents*l.qty)+'</b></div>';}).join('');
+      : cart.map(function(l){return '<div class="sumrow"><span>'+esc(l.product_name)+' '+l.size_kg+' '+esc(l.unit||'kg')+' × '+l.qty+'</span><b>'+zar(l.unit_price_cents*l.qty)+'</b></div>';}).join('');
     var addr=[myDistributor.address1,myDistributor.address2,myDistributor.city,myDistributor.province].filter(Boolean).join('\n');
     var name=((myDistributor.name||'')+' '+(myDistributor.surname||'')).trim();
     var depotOpts=(depotsCache||[]).map(function(d){return '<option value="'+d.id+'">'+esc(d.name)+'</option>';}).join('')||'<option value="">(no depots configured)</option>';
@@ -716,7 +719,7 @@ function placeOrder(){
 /* ---------- confirmation + EFT proof upload (distributor) ---------- */
 function viewConfirm(orderId){
   shell('<div id="cf" class="muted">Loading…</div>','');
-  sb.from('orders').select('id,order_number,status,payment_method,payment_status,fulfillment_type,delivery_address,depot_id,delivery_fee_cents,discount_cents,total_cents,notes,is_package,order_items(product_name,size_kg,unit_price_cents,qty),payments(id,proof_url)').eq('id',orderId).maybeSingle()
+  sb.from('orders').select('id,order_number,status,payment_method,payment_status,fulfillment_type,delivery_address,depot_id,delivery_fee_cents,discount_cents,total_cents,notes,is_package,order_items(product_name,size_kg,unit,unit_price_cents,qty),payments(id,proof_url)').eq('id',orderId).maybeSingle()
     .then(function(r){
       var box=document.getElementById('cf');
       if(r.error||!r.data){ box.innerHTML='<div class="msg err">Order not found.</div>'; return; }
@@ -725,7 +728,7 @@ function viewConfirm(orderId){
       var pkgFixed=(o.total_cents||0)-(o.delivery_fee_cents||0), pkgReg=pkgFixed+(o.discount_cents||0);
       var pkgItems = o.is_package
         ? '<div class="sumrow"><span>'+esc(o.notes||'Package deal')+' × 1</span><b>'+zar(pkgFixed)+'</b></div>'+(o.discount_cents>0?'<div class="sumrow"><span class="muted">Discount <span style="font-size:12px">(vs. '+zar(pkgReg)+' regular)</span></span><b style="color:var(--green-dark)">'+zar(o.discount_cents)+'</b></div>':'')
-        : (o.order_items||[]).map(function(i){return '<div class="sumrow"><span>'+esc(i.product_name)+' '+i.size_kg+'kg × '+i.qty+'</span><b>'+zar(i.unit_price_cents*i.qty)+'</b></div>';}).join('');
+        : (o.order_items||[]).map(function(i){return '<div class="sumrow"><span>'+esc(i.product_name)+' '+i.size_kg+' '+esc(i.unit||'kg')+' × '+i.qty+'</span><b>'+zar(i.unit_price_cents*i.qty)+'</b></div>';}).join('');
       box.innerHTML='<div class="card" style="max-width:560px;margin:0 auto">'
         +'<div class="h1">Order '+esc(o.order_number)+'</div><p class="sub">Status: <span class="pill">'+esc(titleCase(o.status))+'</span> · Payment: <span class="pill">'+esc(o.payment_status)+'</span>'+(o.is_package?' · <span class="pill" style="background:var(--yellow);color:var(--green-dark)">Package deal</span>':'')+'</p>'
         +(o.payment_method==='cash'?'<div class="msg">💵 Please have <b>'+zar(o.total_cents)+'</b> ready to pay on '+(o.fulfillment_type==='collection'?'collection':'delivery')+'.</div>':'')
@@ -809,7 +812,7 @@ function showOrderModal(orderId){
     if(ev.target===host || (ev.target.closest && ev.target.closest('[data-close]'))) document.body.removeChild(host);
   });
   document.body.appendChild(host);
-  sb.from('orders').select('*,distributors(name,surname,login_name,phone,alternatephone,email,address1,address2,city,province),depots(name,address),order_items(product_name,size_kg,unit_price_cents,qty),payments(id,proof_url,status)').eq('id',orderId).maybeSingle()
+  sb.from('orders').select('*,distributors(name,surname,login_name,phone,alternatephone,email,address1,address2,city,province),depots(name,address),order_items(product_name,size_kg,unit,unit_price_cents,qty),payments(id,proof_url,status)').eq('id',orderId).maybeSingle()
     .then(function(r){
       var box=host.querySelector('.modal-box');
       if(r.error||!r.data){ box.innerHTML='<div class="msg err">Could not load order'+(r.error?': '+esc(r.error.message):'')+'</div><button class="btn btn-block" data-close style="margin-top:10px">Close</button>'; return; }
@@ -818,7 +821,7 @@ function showOrderModal(orderId){
       var proof=(o.payments||[]).filter(function(p){return p.proof_url;})[0];
       var itemsHtml = o.is_package
         ? '<div class="sumrow"><span>'+esc(o.notes||'Package deal')+' × 1</span><b>'+zar(pkgFixed)+'</b></div>'+(o.discount_cents>0?'<div class="sumrow"><span class="muted">Discount <span style="font-size:12px">(vs. '+zar(pkgReg)+' regular)</span></span><b style="color:var(--green-dark)">'+zar(o.discount_cents)+'</b></div>':'')
-        : (o.order_items||[]).map(function(i){return '<div class="sumrow"><span>'+esc(i.product_name)+' '+i.size_kg+'kg × '+i.qty+'</span><b>'+zar(i.unit_price_cents*i.qty)+'</b></div>';}).join('');
+        : (o.order_items||[]).map(function(i){return '<div class="sumrow"><span>'+esc(i.product_name)+' '+i.size_kg+' '+esc(i.unit||'kg')+' × '+i.qty+'</span><b>'+zar(i.unit_price_cents*i.qty)+'</b></div>';}).join('');
       box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div class="h1" style="margin:0">Order '+esc(o.order_number)+'</div><button class="btn btn-ghost btn-sm" data-close>✕</button></div>'
         +'<p class="sub">Placed '+esc(String(o.placed_at||'').slice(0,16).replace('T',' '))+' · <span class="pill">'+esc(titleCase(o.status))+'</span>'+(o.is_package?' · <span class="pill" style="background:var(--yellow);color:var(--green-dark)">Package deal</span>':'')+'</p>'
         +(me.role==='admin'?'<div class="card" style="margin-top:0"><b>Distributor</b>'
