@@ -525,6 +525,10 @@ function viewDeal(id){
     } else { render(null); }
   });
 }
+function prodIcon(p, emojiPx){
+  if(/maize/i.test((p&&p.name)||'')) return '<img src="'+MAIZE_ICON+'" alt="Maize meal">';
+  return '<span style="font-size:'+emojiPx+'px;line-height:1">'+esc((p&&p.icon)||'📦')+'</span>';
+}
 function viewShop(){
   shell('<div class="h1">Shop</div><p class="sub">Delivered or collected · pay by cash or EFT</p><div id="shop" class="muted">Loading…</div>','shop');
   loadCatalogueData(function(products, err){
@@ -534,7 +538,7 @@ function viewShop(){
       ? '<div class="grid products">'+products.map(function(p){
           var v=p.product_variants[0]||{size_kg:0,wholesale_price_cents:0};
           return '<div class="card product" data-open="'+p.id+'" style="cursor:pointer">'
-            +'<div class="pimg" style="display:flex;align-items:center;justify-content:center;font-size:46px;line-height:1">'+esc(p.icon||'📦')+'</div>'
+            +'<div class="pimg" style="display:flex;align-items:center;justify-content:center">'+prodIcon(p,46)+'</div>'
             +'<div class="pcat">'+esc(p.category||'')+'</div><div class="pname">'+esc(p.name)+'</div>'
             +'<div class="psize">from '+v.size_kg+' '+esc(p.unit||'kg')+'</div>'
             +'<div class="pprice">'+zar(v.wholesale_price_cents)+' <span class="muted">/ '+v.size_kg+' '+esc(p.unit||'kg')+'</span></div>'
@@ -574,7 +578,7 @@ function viewProduct(id){
     var badge=v.stock_qty<=0?'<span class="pill red">Out of stock</span>':(v.stock_qty<=thr?'<span class="pill amber">Low — '+v.stock_qty+' left</span>':'<span class="pill">In stock</span>');
     var sizes=p.product_variants.map(function(x){ var out=x.stock_qty<=0; return '<button class="tab'+(x.id===sel.variantId?' active':'')+'" data-size="'+x.id+'"'+(out?' disabled':'')+'>'+x.size_kg+' '+esc(p.unit||'kg')+(out?' (out)':'')+'</button>'; }).join('');
     shell('<button class="btn btn-ghost btn-sm" data-nav="#/shop">‹ Back to shop</button>'
-      +'<div class="pimg detail" style="margin-top:8px;display:flex;align-items:center;justify-content:center;font-size:84px;line-height:1">'+esc(p.icon||'📦')+'</div>'
+      +'<div class="pimg detail" style="margin-top:8px;display:flex;align-items:center;justify-content:center">'+prodIcon(p,84)+'</div>'
       +'<div class="h1" style="margin-top:12px">'+esc(p.name)+'</div><p class="sub">'+esc(p.description||'')+'</p>'
       +'<label>Size</label><div class="nav">'+sizes+'</div>'
       +'<div class="pprice" style="margin:12px 0">'+zar(v.wholesale_price_cents)+' <span class="role">WHOLESALE</span></div>'
