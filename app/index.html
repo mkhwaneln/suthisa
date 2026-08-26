@@ -254,7 +254,7 @@ function shell(inner, view){
 
 function loadCatalogue(){
   shell('<div class="h1">Products &amp; stock</div><p class="sub">Edit names, sizes, prices (R) and stock — changes save automatically. Add or remove products and sizes below.</p><div id="cat" class="muted">Loading catalogue…</div>', 'catalogue');
-  sb.from('products').select('id,name,category,unit,product_variants(id,size_kg,wholesale_price_cents,retail_price_cents,stock_qty,low_stock_threshold)').order('name')
+  sb.from('products').select('id,name,category,unit,icon,product_variants(id,size_kg,wholesale_price_cents,retail_price_cents,stock_qty,low_stock_threshold)').order('name')
     .then(function(r){
       var cat=document.getElementById('cat');
       if(r.error){ cat.innerHTML='<div class="msg err">Could not load products: '+esc(r.error.message)+'</div>'; return; }
@@ -274,7 +274,8 @@ function loadCatalogue(){
         }).join('')||'<tr><td colspan="6" class="muted">No sizes yet — add one below.</td></tr>';
         return '<div class="card" style="margin-bottom:14px">'
           +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
-            +'<input type="text" data-pf="name" data-pid="'+p.id+'" value="'+esc(p.name)+'" style="font-weight:700;max-width:220px" placeholder="Product name">'
+            +'<input type="text" data-pf="icon" data-pid="'+p.id+'" value="'+esc(p.icon||'')+'" style="width:46px;text-align:center;font-size:20px" placeholder="🛒" title="Icon (emoji)">'
+            +'<input type="text" data-pf="name" data-pid="'+p.id+'" value="'+esc(p.name)+'" style="font-weight:700;max-width:200px" placeholder="Product name">'
             +'<input type="text" data-pf="category" data-pid="'+p.id+'" value="'+esc(p.category||'')+'" style="max-width:150px" placeholder="Category">'
             +'<input type="text" data-pf="unit" data-pid="'+p.id+'" value="'+esc(p.unit||'kg')+'" style="max-width:90px" placeholder="Unit" title="Unit (kg, ml, eggs…)">'
             +'<div style="flex:1"></div>'
@@ -288,6 +289,7 @@ function loadCatalogue(){
         +'<label>Name</label><input type="text" id="npname" placeholder="e.g. Maize Meal">'
         +'<label>Category</label><input type="text" id="npcat" placeholder="Maize Meal">'
         +'<label>Unit <span class="muted">(kg, ml, eggs, pack…)</span></label><input type="text" id="npunit" value="kg" placeholder="kg">'
+        +'<label>Icon <span class="muted">(emoji, optional)</span></label><input type="text" id="npicon" placeholder="🛒" style="max-width:90px">'
         +'<button class="btn" id="npadd" style="margin-top:10px">Add product</button></div><div id="savemsg"></div>';
       function msg(html){ var m=document.getElementById('savemsg'); if(!m) return; m.innerHTML=html; if(html) setTimeout(function(){ if(m) m.innerHTML=''; }, 2500); }
       cat.addEventListener('change', function(ev){
@@ -317,7 +319,7 @@ function loadCatalogue(){
         if(dv){ if(!confirm('Remove this size?')) return; sb.from('product_variants').delete().eq('id', dv.getAttribute('data-delvar')).then(function(rr){ if(rr.error){ msg('<div class="msg err">Remove failed (it may be used by an existing order): '+esc(rr.error.message)+'</div>'); return; } loadCatalogue(); }); return; }
         var dp=ev.target.closest && ev.target.closest('[data-delprod]');
         if(dp){ if(!confirm('Delete this product and all its sizes?')) return; sb.from('products').delete().eq('id', dp.getAttribute('data-delprod')).then(function(rr){ if(rr.error){ msg('<div class="msg err">Delete failed (it may be used by an existing order): '+esc(rr.error.message)+'</div>'); return; } loadCatalogue(); }); return; }
-        if(ev.target.id==='npadd'){ var n=(document.getElementById('npname').value||'').trim(), c=(document.getElementById('npcat').value||'').trim()||'Maize Meal'; if(!n){ msg('<div class="msg err">Product name is required.</div>'); return; } var u=(document.getElementById('npunit').value||'').trim()||'kg'; ev.target.disabled=true; sb.from('products').insert({name:n, category:c, unit:u}).then(function(rr){ ev.target.disabled=false; if(rr.error){ msg('<div class="msg err">Add failed: '+esc(rr.error.message)+'</div>'); return; } loadCatalogue(); }); return; }
+        if(ev.target.id==='npadd'){ var n=(document.getElementById('npname').value||'').trim(), c=(document.getElementById('npcat').value||'').trim()||'Maize Meal'; if(!n){ msg('<div class="msg err">Product name is required.</div>'); return; } var u=(document.getElementById('npunit').value||'').trim()||'kg', ic=(document.getElementById('npicon').value||'').trim()||null; ev.target.disabled=true; sb.from('products').insert({name:n, category:c, unit:u, icon:ic}).then(function(rr){ ev.target.disabled=false; if(rr.error){ msg('<div class="msg err">Add failed: '+esc(rr.error.message)+'</div>'); return; } loadCatalogue(); }); return; }
       });
     });
 }
@@ -355,8 +357,8 @@ function loadStock(){
 /* ---------- shop + product (distributor) ---------- */
 var catalogueCache=null, detailSel={};
 function loadCatalogueData(cb){
-  if(catalogueCache){ return cb(catalogueCache); }
-  sb.from('products').select('id,name,category,description,unit,product_variants(id,size_kg,wholesale_price_cents,stock_qty,low_stock_threshold)')
+  // always fetch fresh so newly added / edited products show without a reload
+  sb.from('products').select('id,name,category,description,unit,icon,product_variants(id,size_kg,wholesale_price_cents,stock_qty,low_stock_threshold)')
     .eq('is_active',true).order('name').then(function(r){
       if(r.error){ cb(null, r.error); return; }
       (r.data||[]).forEach(function(p){ (p.product_variants||[]).sort(function(a,b){return a.size_kg-b.size_kg;}); });
@@ -524,7 +526,7 @@ function viewDeal(id){
   });
 }
 function viewShop(){
-  shell('<div class="h1">Order maize meal</div><p class="sub">Fresh from the mill · delivered or collected · pay by cash or EFT</p><div id="shop" class="muted">Loading…</div>','shop');
+  shell('<div class="h1">Shop</div><p class="sub">Delivered or collected · pay by cash or EFT</p><div id="shop" class="muted">Loading…</div>','shop');
   loadCatalogueData(function(products, err){
     var box=document.getElementById('shop');
     if(err){ box.innerHTML='<div class="msg err">Could not load products: '+esc(err.message)+'</div>'; return; }
@@ -532,7 +534,7 @@ function viewShop(){
       ? '<div class="grid products">'+products.map(function(p){
           var v=p.product_variants[0]||{size_kg:0,wholesale_price_cents:0};
           return '<div class="card product" data-open="'+p.id+'" style="cursor:pointer">'
-            +'<div class="pimg"><img src="'+MAIZE_ICON+'" alt="Maize meal"></div>'
+            +'<div class="pimg" style="display:flex;align-items:center;justify-content:center;font-size:46px;line-height:1">'+esc(p.icon||'📦')+'</div>'
             +'<div class="pcat">'+esc(p.category||'')+'</div><div class="pname">'+esc(p.name)+'</div>'
             +'<div class="psize">from '+v.size_kg+' '+esc(p.unit||'kg')+'</div>'
             +'<div class="pprice">'+zar(v.wholesale_price_cents)+' <span class="muted">/ '+v.size_kg+' '+esc(p.unit||'kg')+'</span></div>'
@@ -572,7 +574,7 @@ function viewProduct(id){
     var badge=v.stock_qty<=0?'<span class="pill red">Out of stock</span>':(v.stock_qty<=thr?'<span class="pill amber">Low — '+v.stock_qty+' left</span>':'<span class="pill">In stock</span>');
     var sizes=p.product_variants.map(function(x){ var out=x.stock_qty<=0; return '<button class="tab'+(x.id===sel.variantId?' active':'')+'" data-size="'+x.id+'"'+(out?' disabled':'')+'>'+x.size_kg+' '+esc(p.unit||'kg')+(out?' (out)':'')+'</button>'; }).join('');
     shell('<button class="btn btn-ghost btn-sm" data-nav="#/shop">‹ Back to shop</button>'
-      +'<div class="pimg detail" style="margin-top:8px"><img src="'+MAIZE_ICON+'" alt="Maize meal"></div>'
+      +'<div class="pimg detail" style="margin-top:8px;display:flex;align-items:center;justify-content:center;font-size:84px;line-height:1">'+esc(p.icon||'📦')+'</div>'
       +'<div class="h1" style="margin-top:12px">'+esc(p.name)+'</div><p class="sub">'+esc(p.description||'')+'</p>'
       +'<label>Size</label><div class="nav">'+sizes+'</div>'
       +'<div class="pprice" style="margin:12px 0">'+zar(v.wholesale_price_cents)+' <span class="role">WHOLESALE</span></div>'
