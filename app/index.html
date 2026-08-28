@@ -560,6 +560,9 @@ function viewShop(){
           if(st==='pending'){
             return '<div class="card" data-nav="#/orders" style="cursor:pointer;border:2px solid #e67e22;background:#fff3e0;display:flex;align-items:center;gap:12px;margin-bottom:12px"><div style="font-size:26px">⏳</div><div style="flex:1"><b>'+title+'</b><div class="muted">Pending — awaiting approval.</div></div><span class="btn btn-sm" style="background:#e67e22;color:#fff">My orders</span></div>';
           }
+          if(st==='ordered'){
+            return '<div class="card" data-nav="#/orders" style="cursor:pointer;border:2px solid #64748b;background:#f1f5f9;display:flex;align-items:center;gap:12px;margin-bottom:12px"><div style="font-size:26px">🧾</div><div style="flex:1"><b>'+title+'</b><div class="muted">Order placed — pending. Track it in My orders.</div></div><span class="btn btn-sm" style="background:#64748b;color:#fff">My orders</span></div>';
+          }
           return '<div class="card" data-viewdeal="'+d.id+'" style="cursor:pointer;border:2px solid #2563eb;background:#e8f0fe;display:flex;align-items:center;gap:12px;margin-bottom:12px"><div style="font-size:26px">🚛</div><div style="flex:1"><b>'+title+'</b><div class="muted">'+esc(d.subtitle||'Bulk package deal — tap to view.')+'</div></div><span class="btn btn-sm" style="background:#2563eb;color:#fff">View Deal</span></div>';
         }).join('');
         box.innerHTML=banners+grid;
@@ -570,7 +573,7 @@ function viewShop(){
         });
       }
       if(me.user){
-        sb.from('deal_requests').select('deal_id,status,created_at').in('status',['pending','approved']).order('created_at',{ascending:false}).then(function(rr){
+        sb.from('deal_requests').select('deal_id,status,created_at').in('status',['pending','approved','ordered']).order('created_at',{ascending:false}).then(function(rr){
           render(rr.data||[]);
         });
       } else { render([]); }
