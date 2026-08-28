@@ -549,24 +549,30 @@ function viewShop(){
       : '<div class="msg">No products yet.</div>';
     loadDeals(function(deals){
       var activeDeal=(deals||[]).filter(function(x){return x.is_active;})[0];
-      function render(approvedId, pendingId){
-        var banners='';
-        if(approvedId){ banners+='<div class="card" data-viewdeal="'+approvedId+'" style="cursor:pointer;border:2px solid var(--green);background:#e8f5e9;display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="font-size:28px">✅</div><div style="flex:1"><b>Your package deal has been approved!</b><div class="muted">Tap to review and order your package.</div></div><span class="btn btn-sm">Order now</span></div>'; }
-        if(pendingId){ banners+='<div class="card" data-viewdeal="'+pendingId+'" style="cursor:pointer;border:2px solid var(--yellow);background:#fff8e1;display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="font-size:28px">⏳</div><div style="flex:1"><b>Package deal request pending</b><div class="muted">Your request is awaiting approval. Tap to view.</div></div><span class="btn btn-sm" style="background:var(--yellow);color:var(--green-dark)">View</span></div>'; }
+      function render(reqs){
+        var banners='', seen={};
+        (reqs||[]).forEach(function(rq){
+          if(!rq.deal_id || seen[rq.deal_id]) return; seen[rq.deal_id]=true;   // one banner per deal
+          var title=esc(rq.deal_title||'Package deal');
+          if(rq.status==='approved'){
+            banners+='<div class="card" data-viewdeal="'+rq.deal_id+'" style="cursor:pointer;border:2px solid var(--green);background:#e8f5e9;display:flex;align-items:center;gap:12px;margin-bottom:12px"><div style="font-size:26px">✅</div><div style="flex:1"><b>'+title+'</b><div class="muted">Approved — ready to order.</div></div><span class="btn btn-sm">Order Now</span></div>';
+          } else {
+            banners+='<div class="card" data-nav="#/orders" style="cursor:pointer;border:2px solid #e67e22;background:#fff3e0;display:flex;align-items:center;gap:12px;margin-bottom:12px"><div style="font-size:26px">⏳</div><div style="flex:1"><b>'+title+'</b><div class="muted">Pending — awaiting approval.</div></div><span class="btn btn-sm" style="background:#e67e22;color:#fff">My orders</span></div>';
+          }
+        });
         box.innerHTML=banners+dealBanner(activeDeal)+grid;
         box.addEventListener('click', function(ev){
           var vd=ev.target.closest && ev.target.closest('[data-viewdeal]'); if(vd){ go('#/deal/'+vd.getAttribute('data-viewdeal')); return; }
+          var nv=ev.target.closest && ev.target.closest('[data-nav]'); if(nv){ go(nv.getAttribute('data-nav')); return; }
           var d=ev.target.closest && ev.target.closest('[data-open-deal]'); if(d){ go('#/deals'); return; }
           var el=ev.target.closest('[data-open]'); if(el){ go('#/product/'+el.getAttribute('data-open')); }
         });
       }
       if(me.user){
-        sb.from('deal_requests').select('deal_id,status,created_at').in('status',['pending','approved']).order('created_at',{ascending:false}).then(function(rr){
-          var rows=rr.data||[], ap=null, pe=null;
-          rows.forEach(function(x){ if(x.status==='approved' && !ap) ap=x.deal_id; if(x.status==='pending' && !pe) pe=x.deal_id; });
-          render(ap, pe);
+        sb.from('deal_requests').select('deal_id,deal_title,status,created_at').in('status',['pending','approved']).order('created_at',{ascending:false}).then(function(rr){
+          render(rr.data||[]);
         });
-      } else { render(null, null); }
+      } else { render([]); }
     });
   });
 }
