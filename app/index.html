@@ -738,7 +738,7 @@ function placeOrder(){
 /* ---------- confirmation + EFT proof upload (distributor) ---------- */
 function viewConfirm(orderId){
   shell('<div id="cf" class="muted">Loading…</div>','');
-  sb.from('orders').select('id,order_number,status,payment_method,payment_status,fulfillment_type,delivery_address,depot_id,delivery_fee_cents,discount_cents,total_cents,notes,is_package,order_items(product_name,size_kg,unit,unit_price_cents,qty),payments(id,proof_url)').eq('id',orderId).maybeSingle()
+  sb.from('orders').select('id,order_number,status,payment_method,payment_status,fulfillment_type,delivery_address,depot_id,delivery_fee_cents,discount_cents,total_cents,notes,is_package,distributors(name,surname),order_items(product_name,size_kg,unit,unit_price_cents,qty),payments(id,proof_url)').eq('id',orderId).maybeSingle()
     .then(function(r){
       var box=document.getElementById('cf');
       if(r.error||!r.data){ box.innerHTML='<div class="msg err">Order not found.</div>'; return; }
@@ -750,6 +750,7 @@ function viewConfirm(orderId){
         : (o.order_items||[]).map(function(i){return '<div class="sumrow"><span>'+esc(i.product_name)+' '+i.size_kg+' '+esc(i.unit||'kg')+' × '+i.qty+'</span><b>'+zar(i.unit_price_cents*i.qty)+'</b></div>';}).join('');
       box.innerHTML='<div class="card" style="max-width:560px;margin:0 auto">'
         +'<div class="h1">Order '+esc(o.order_number)+'</div><p class="sub">Status: <span class="pill">'+esc(titleCase(o.status))+'</span> · Payment: <span class="pill">'+esc(o.payment_status)+'</span>'+(o.is_package?' · <span class="pill" style="background:var(--yellow);color:var(--green-dark)">Package deal</span>':'')+'</p>'
+        +(o.distributors?'<p class="sub" style="margin-top:2px">Placed by <b>'+esc(((o.distributors.name||'')+' '+(o.distributors.surname||'')).trim())+'</b></p>':'')
         +(o.payment_method==='cash'?'<div class="msg">💵 Please have <b>'+zar(o.total_cents)+'</b> ready to pay on '+(o.fulfillment_type==='collection'?'collection':'delivery')+'.</div>':'')
         +(eftPending?'<div class="msg">🏦 Pay <b>'+zar(o.total_cents)+'</b> by EFT using reference <b>'+esc(o.order_number)+'</b>, then upload your proof.'+(hasProof?'<br>✅ Proof uploaded — awaiting verification.':'<br><label>Upload proof of payment</label><input type="file" id="proof" accept="image/*,application/pdf"><button class="btn btn-sm" id="up" style="margin-top:6px">Upload</button>')+'</div>':'')
         +'<div class="card">'+pkgItems
