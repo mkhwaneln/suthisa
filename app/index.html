@@ -795,7 +795,7 @@ function viewAdminOrders(){
         +ORDER_STATUSES.map(function(s){return '<option value="'+s+'"'+(adminOrdersFilter===s?' selected':'')+'>'+titleCase(s)+'</option>';}).join('')+'</select></div>'
     +'<div id="ao" class="muted">Loading…</div>','adminorders');
   var fs=document.getElementById('ofilter'); if(fs) fs.addEventListener('change', function(){ adminOrdersFilter=this.value; viewAdminOrders(); });
-  var q=sb.from('orders').select('id,order_number,status,payment_method,payment_status,total_cents,placed_at,distributors(name,surname),payments(id,proof_url,status)');
+  var q=sb.from('orders').select('id,order_number,status,payment_method,payment_status,total_cents,placed_at,distributors(name,surname,login_name),payments(id,proof_url,status)');
   if(adminOrdersFilter!=='all') q=q.eq('status', adminOrdersFilter);
   q.order('placed_at',{ascending:false}).then(function(r){
       var box=document.getElementById('ao');
@@ -804,11 +804,12 @@ function viewAdminOrders(){
       if(!os.length){ box.innerHTML='<div class="msg">No orders'+(adminOrdersFilter!=='all'?' with status "'+esc(titleCase(adminOrdersFilter))+'"':' yet')+'.</div>'; return; }
       box.innerHTML='<div class="tablewrap"><table><thead><tr><th>Order</th><th>Distributor</th><th>Total</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody>'
         +os.map(function(o){
-          var d=o.distributors?((o.distributors.name||'')+' '+(o.distributors.surname||'')).trim():'';
+          var dn=o.distributors?((o.distributors.name||'')+' '+(o.distributors.surname||'')).trim():'', dl=(o.distributors&&o.distributors.login_name)||'';
+          var dcell=dn?('<b>'+esc(dn)+'</b>'+(dl?'<br><span class="muted">'+esc(dl)+'</span>':'')):(dl?esc(dl):'—');
           var pay=(o.payments||[])[0];
           var opts=ORDER_STATUSES.map(function(s){return '<option value="'+s+'"'+(s===o.status?' selected':'')+'>'+titleCase(s)+'</option>';}).join('');
           var verify=(o.payment_method==='eft' && pay && pay.proof_url && o.payment_status!=='paid')?' <button class="btn btn-sm btn-ghost" data-viewproof="'+esc(pay.proof_url)+'">View proof</button> <button class="btn btn-sm" data-verify="1" data-oid="'+o.id+'" data-pid="'+pay.id+'">Mark paid</button>':'';
-          return '<tr><td>'+esc(o.order_number)+'</td><td>'+esc(d)+'</td><td>'+zar(o.total_cents)+'</td><td>'+payLabel(o.payment_method)+' · '+titleCase(o.payment_status)+'</td>'
+          return '<tr><td>'+esc(o.order_number)+'</td><td>'+dcell+'</td><td>'+zar(o.total_cents)+'</td><td>'+payLabel(o.payment_method)+' · '+titleCase(o.payment_status)+'</td>'
             +'<td><select data-status data-oid="'+o.id+'">'+opts+'</select></td>'
             +'<td class="actions"><button class="btn btn-sm btn-ghost" data-vieworder="'+o.id+'">View</button>'+verify+'</td></tr>';
         }).join('')+'</tbody></table></div><div id="aomsg"></div>';
