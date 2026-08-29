@@ -544,7 +544,7 @@ function viewShop(){
             +'<div class="pcat">'+esc(p.category||'')+'</div><div class="pname">'+esc(p.name)+'</div>'
             +'<div class="psize">from '+v.size_kg+' '+esc(p.unit||'kg')+'</div>'
             +'<div class="pprice">'+zar(v.wholesale_price_cents)+' <span class="muted">/ '+v.size_kg+' '+esc(p.unit||'kg')+'</span></div>'
-            +'<button class="btn btn-sm btn-block" data-open="'+p.id+'" style="margin-top:8px">View sizes</button></div>';
+            +'<button class="btn btn-sm btn-block" data-open="'+p.id+'" style="margin-top:8px">'+(me.user?'Order':'View sizes')+'</button></div>';
         }).join('')+'</div>'
       : '<div class="msg">No products yet.</div>';
     loadDeals(function(deals){
