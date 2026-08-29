@@ -175,7 +175,7 @@ sb.auth.onAuthStateChange(function(_e, session){
 });
 
 /* ---------- guest (not logged in) ---------- */
-function startGuest(){ me={user:null, role:'guest', name:null, stockOnly:false}; renderRoute(); }
+function startGuest(){ me={user:null, role:'guest', name:null, stockOnly:false}; myDistributor=null; renderRoute(); }
 
 /* ---------- login ---------- */
 function renderLogin(msg){
@@ -203,6 +203,7 @@ function renderLogin(msg){
 /* ---------- signed in ---------- */
 function onSignedIn(user){
   me.user=user;
+  myDistributor=null;   // clear any previous distributor's cached profile
   sb.from('profiles').select('*').eq('id', user.id).single().then(function(r){
     me.role=(r.data && r.data.role) || 'unknown';
     me.name=(r.data && r.data.full_name) || user.email;
