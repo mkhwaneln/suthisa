@@ -787,7 +787,7 @@ function viewMyOrders(){
     });
 }
 var ORDER_STATUSES=['pending','confirmed','preparing','ready','out_for_delivery','completed','cancelled','refunded'];
-var adminOrdersFilter='all';
+var adminOrdersFilter='pending';
 function viewAdminOrders(){
   shell('<div class="h1">Orders</div>'
     +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><label style="margin:0">Filter:</label>'
