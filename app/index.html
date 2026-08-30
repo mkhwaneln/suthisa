@@ -128,7 +128,7 @@ function pkgDiscount(){ var pkg=getPendingPackage(); return (pkg&&pkg.price_cent
 
 /* ---------- router ---------- */
 function go(hash){ location.hash=hash; }
-function parseHash(){ var h=(location.hash||'#/shop').replace(/^#\//,'').split('/'); return {view:h[0]||'shop', id:h[1]||''}; }
+function parseHash(){ var h=(location.hash||'#/shop').replace(/^#\//,'').split('/'); return {view:h[0]||'shop', id:h[1]||'', id2:h[2]||''}; }
 function renderRoute(){
   var r=parseHash();
   if(!me.user){  // guest (not logged in): public catalogue + package deal
@@ -145,6 +145,7 @@ function renderRoute(){
     if(r.view==='admin' && r.id==='depots'){ return viewAdminDepots(); }
     if(r.view==='admin' && r.id==='settings'){ return viewAdminSettings(); }
     if(r.view==='admin' && r.id==='deals'){ return viewAdminDeals(); }
+    if(r.view==='admin' && r.id==='neworder'){ return viewAdminNewOrder(r.id2||''); }
     if(r.view==='distributors'){ return loadDistributors(); }
     return loadCatalogue(); // default admin view (Products & stock)
   }
@@ -225,6 +226,7 @@ function shell(inner, view){
       +'<button class="tab'+(view==='catalogue'?' active':'')+'" data-nav="#/">Products &amp; stock</button>'
       +'<button class="tab'+(view==='distributors'?' active':'')+'" data-nav="#/distributors">Distributors</button>'
       +'<button class="tab'+(view==='adminorders'?' active':'')+'" data-nav="#/admin/orders">Orders</button>'
+      +'<button class="tab'+(view==='adminneworder'?' active':'')+'" data-nav="#/admin/neworder">New order</button>'
       +'<button class="tab'+(view==='admindepots'?' active':'')+'" data-nav="#/admin/depots">Depots</button>'
       +'<button class="tab'+(view==='adminsettings'?' active':'')+'" data-nav="#/admin/settings">Settings</button>'
       +'<button class="tab'+(view==='admindeals'?' active':'')+'" data-nav="#/admin/deals">Deals</button></div>';
@@ -875,6 +877,76 @@ function showOrderModal(orderId){
 }
 
 /* ---------- business settings (admin) ---------- */
+function viewAdminNewOrder(preId){
+  shell('<div class="h1">New order</div><p class="sub">Place an order on behalf of a distributor.</p><div id="no" class="muted">Loading…</div>','adminneworder');
+  Promise.all([
+    sb.from('distributors').select('id,name,surname,login_name,address1,address2,city,province').eq('status','approved').order('name'),
+    sb.from('depots').select('id,name,address').eq('is_active',true).order('name'),
+    sb.from('business_settings').select('default_delivery_fee_cents').maybeSingle()
+  ]).then(function(res){
+    var dists=(res[0]&&res[0].data)||[], depots=(res[1]&&res[1].data)||[], deliveryFee=((res[2]&&res[2].data&&res[2].data.default_delivery_fee_cents)||0);
+    loadCatalogueData(function(products, err){
+      var box=document.getElementById('no');
+      if(err){ box.innerHTML='<div class="msg err">Could not load products: '+esc(err.message)+'</div>'; return; }
+      if(!dists.length){ box.innerHTML='<div class="msg">No approved distributors yet.</div>'; return; }
+      var distOpts=dists.map(function(d){ var nm=((d.name||'')+' '+(d.surname||'')).trim()||d.login_name; return '<option value="'+d.id+'"'+(d.id===preId?' selected':'')+'>'+esc(nm)+(d.login_name?' ('+esc(d.login_name)+')':'')+'</option>'; }).join('');
+      var depotOpts=depots.map(function(x){return '<option value="'+x.id+'">'+esc(x.name)+'</option>';}).join('')||'<option value="">(no depots)</option>';
+      var prodHtml=products.map(function(p){
+        var rows=(p.product_variants||[]).map(function(v){
+          return '<div class="sumrow"><span>'+v.size_kg+' '+esc(p.unit||'kg')+' <span class="muted">· '+zar(v.wholesale_price_cents)+'</span></span><input type="number" min="0" step="1" value="0" data-oq data-vid="'+v.id+'" data-price="'+v.wholesale_price_cents+'" style="width:80px"></div>';
+        }).join('')||'<div class="muted">No sizes.</div>';
+        return '<div class="card" style="margin-bottom:10px"><b>'+esc(p.name)+'</b>'+rows+'</div>';
+      }).join('')||'<div class="msg">No products.</div>';
+      box.innerHTML='<div class="card"><label>Distributor</label><select id="nodist">'+distOpts+'</select></div>'
+        +'<div style="margin-top:12px"><b>Products</b>'+prodHtml+'</div>'
+        +'<div class="card"><b>How will they receive it?</b><label>Fulfilment</label><select id="noff"><option value="delivery">Delivery</option><option value="collection">Collection</option></select>'
+          +'<div id="nodeliv"><label>Delivery address</label><textarea id="noaddr" rows="3"></textarea></div>'
+          +'<div id="nocoll" style="display:none"><label>Collect from</label><select id="nodepot">'+depotOpts+'</select></div></div>'
+        +'<div class="card"><b>Payment</b><label>Method</label><select id="nopay"><option value="cash">Cash</option><option value="eft">Manual EFT</option></select></div>'
+        +'<div class="card" style="max-width:340px;margin-left:auto">'
+          +'<div class="sumrow"><span>Subtotal</span><b id="nosub">'+zar(0)+'</b></div>'
+          +'<div class="sumrow"><span>Delivery</span><b id="nodelivfee">'+zar(deliveryFee)+'</b></div>'
+          +'<div class="sumrow total"><span>Total</span><b id="nototal">'+zar(deliveryFee)+'</b></div>'
+          +'<button class="btn btn-block" id="noplace" style="margin-top:10px">Place order</button></div>'
+        +'<div id="nomsg"></div>';
+      function selDist(){ return dists.filter(function(d){return d.id===document.getElementById('nodist').value;})[0]; }
+      function prefillAddr(){ var d=selDist(); if(d) document.getElementById('noaddr').value=[d.address1,d.address2,d.city,d.province].filter(Boolean).join('\n'); }
+      function recompute(){
+        var sub=0; Array.prototype.forEach.call(box.querySelectorAll('[data-oq]'), function(i){ var q=parseInt(i.value||0,10)||0; if(q<0)q=0; sub+=q*(parseInt(i.getAttribute('data-price'),10)||0); });
+        var dv=document.getElementById('noff').value==='delivery'?deliveryFee:0;
+        document.getElementById('nosub').textContent=zar(sub);
+        document.getElementById('nodelivfee').textContent=zar(dv);
+        document.getElementById('nototal').textContent=zar(sub+dv);
+      }
+      prefillAddr(); recompute();
+      box.addEventListener('input', function(ev){ if(ev.target.hasAttribute&&ev.target.hasAttribute('data-oq')) recompute(); });
+      box.addEventListener('change', function(ev){
+        if(ev.target.id==='noff'){ var ff=ev.target.value; document.getElementById('nodeliv').style.display=ff==='delivery'?'':'none'; document.getElementById('nocoll').style.display=ff==='collection'?'':'none'; recompute(); }
+        if(ev.target.id==='nodist'){ prefillAddr(); }
+      });
+      box.addEventListener('click', function(ev){
+        if(ev.target.id!=='noplace') return;
+        var btn=ev.target, msg=document.getElementById('nomsg'), did=document.getElementById('nodist').value;
+        var items=[]; Array.prototype.forEach.call(box.querySelectorAll('[data-oq]'), function(i){ var q=parseInt(i.value||0,10)||0; if(q>0) items.push({variant_id:i.getAttribute('data-vid'), qty:q}); });
+        if(!items.length){ msg.innerHTML='<div class="msg err">Add at least one product quantity.</div>'; return; }
+        var ff=document.getElementById('noff').value;
+        var addr=ff==='delivery'?(document.getElementById('noaddr').value||'').trim():null;
+        var depot=ff==='collection'?document.getElementById('nodepot').value:null;
+        if(ff==='delivery' && !addr){ msg.innerHTML='<div class="msg err">Enter a delivery address.</div>'; return; }
+        if(ff==='collection' && !depot){ msg.innerHTML='<div class="msg err">Choose a depot.</div>'; return; }
+        btn.disabled=true; btn.textContent='Placing…';
+        sb.rpc('place_order', { p_items:items, p_fulfillment:ff, p_delivery_address:addr, p_depot_id:depot||null, p_payment_method:document.getElementById('nopay').value, p_notes:null, p_distributor_id:did }).then(function(r){
+          btn.disabled=false; btn.textContent='Place order';
+          if(r.error){ msg.innerHTML='<div class="msg err">Could not place order: '+esc(r.error.message)+'</div>'; return; }
+          var row=Array.isArray(r.data)?r.data[0]:r.data; catalogueCache=null;
+          msg.innerHTML='<div class="msg ok">Order <b>'+esc(row.order_number)+'</b> placed. <button class="btn btn-sm" id="noview">View</button></div>';
+          var vb=document.getElementById('noview'); if(vb) vb.addEventListener('click', function(){ showOrderModal(row.order_id); });
+          Array.prototype.forEach.call(box.querySelectorAll('[data-oq]'), function(i){ i.value=0; }); recompute();
+        });
+      });
+    });
+  });
+}
 function viewAdminSettings(){
   shell('<div class="h1">Business settings</div><p class="sub">Bank details (shown to distributors paying by EFT) and the delivery fee. Changes save automatically.</p><div id="bset" class="muted">Loading…</div>', 'adminsettings');
   sb.from('business_settings').select('*').maybeSingle().then(function(r){
@@ -1067,7 +1139,7 @@ function distStatusPill(s){
   return '<span class="pill red">'+esc(titleCase(s)||'—')+'</span>';
 }
 function distActions(d){
-  if(d.status==='approved') return '<button class="btn btn-ghost btn-sm" data-act="suspend" data-id="'+d.id+'">Suspend</button>';
+  if(d.status==='approved') return '<button class="btn btn-sm" data-act="order" data-id="'+d.id+'">Place order</button> <button class="btn btn-ghost btn-sm" data-act="suspend" data-id="'+d.id+'">Suspend</button>';
   if(d.status==='pending')  return '<button class="btn btn-sm" data-act="approve" data-id="'+d.id+'">Approve</button><button class="btn btn-ghost btn-sm" data-act="reject" data-id="'+d.id+'">Reject</button>';
   if(d.status==='suspended')return '<button class="btn btn-sm" data-act="approve" data-id="'+d.id+'">Re-activate</button>';
   return '<button class="btn btn-sm" data-act="approve" data-id="'+d.id+'">Approve</button>';
@@ -1163,6 +1235,7 @@ function loadDistributors(){
       if(pg){ if(pg.getAttribute('data-pg')==='prev'&&distPage>0) distPage--; else if(pg.getAttribute('data-pg')==='next') distPage++; loadDistTable(); return; }
       var el=ev.target.closest ? ev.target.closest('[data-act]') : null; if(!el) return;
       var act=el.getAttribute('data-act'), id=el.getAttribute('data-id');
+      if(act==='order'){ go('#/admin/neworder/'+id); return; }
       var status = act==='approve'?'approved' : act==='suspend'?'suspended' : act==='reject'?'rejected' : null;
       if(!status) return;
       var patch={status:status}; if(status==='approved'){ patch.approved_at=new Date().toISOString(); patch.approved_by=me.user.id; }
