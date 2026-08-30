@@ -599,16 +599,18 @@ function viewProduct(id){
       +'<div class="pprice" style="margin:12px 0">'+zar(v.wholesale_price_cents)+' <span class="role">WHOLESALE</span></div>'
       +'<div style="margin:8px 0">'+badge+'</div>'
       +(me.user
-        ? '<label>Quantity</label><div class="nav"><button class="btn btn-ghost btn-sm" data-q="-1">−</button><span id="qv" style="padding:8px 12px;font-weight:700">'+sel.qty+'</span><button class="btn btn-ghost btn-sm" data-q="1">+</button></div>'
+        ? '<label>Quantity</label><div class="nav" style="align-items:center"><button class="btn btn-ghost btn-sm" data-q="-1">−</button><input id="qv" type="number" min="1" value="'+sel.qty+'" style="width:76px;text-align:center;font-weight:700;padding:6px 4px;margin:0 6px"><button class="btn btn-ghost btn-sm" data-q="1">+</button></div>'
           +'<button class="btn btn-block" id="add" style="margin-top:16px"'+(v.stock_qty<=0?' disabled':'')+'>Add to cart · '+zar(v.wholesale_price_cents*sel.qty)+'</button>'
         : '<button class="btn btn-block" data-nav="#/login" style="margin-top:16px">Sign in to order</button>')
       +'<div class="msg" style="margin-top:12px">🌽 Maize meal is <b>zero-rated</b> — no 15% VAT.</div>','shop');
-    document.getElementById('main').addEventListener('click', function(ev){
+    var main=document.getElementById('main');
+    main.addEventListener('click', function(ev){
       var s=ev.target.closest('[data-size]'); if(s){ sel.variantId=s.getAttribute('data-size'); sel.qty=1; viewProduct(id); return; }
       var b=ev.target.closest('[data-nav]'); if(b){ go(b.getAttribute('data-nav')); return; }
-      var q=ev.target.closest('[data-q]'); if(q){ sel.qty=Math.max(1, sel.qty+parseInt(q.getAttribute('data-q'),10)); viewProduct(id); return; }
-      if(ev.target.id==='add'){ setPendingPackage(null); addToCart(v, p, sel.qty); go('#/cart'); }
+      var q=ev.target.closest('[data-q]'); if(q){ var qi=document.getElementById('qv'); var cur=qi?Math.max(1,parseInt(qi.value,10)||1):sel.qty; sel.qty=Math.max(1, cur+parseInt(q.getAttribute('data-q'),10)); viewProduct(id); return; }
+      if(ev.target.id==='add'){ var qa=document.getElementById('qv'); if(qa) sel.qty=Math.max(1,parseInt(qa.value,10)||1); setPendingPackage(null); addToCart(v, p, sel.qty); go('#/cart'); }
     });
+    main.addEventListener('input', function(ev){ if(ev.target.id==='qv'){ var n=Math.max(1,parseInt(ev.target.value,10)||1); var a=document.getElementById('add'); if(a) a.textContent='Add to cart · '+zar(v.wholesale_price_cents*n); } });
   });
 }
 function addToCart(v, p, qty){
@@ -630,7 +632,7 @@ function viewCart(){
         +'<td><button class="btn btn-ghost btn-sm" data-rmpkg="1">Remove</button></td></tr>'
     : cart.map(function(l){ return '<tr><td><b>'+esc(l.product_name)+'</b><br><span class="muted">'+l.size_kg+' '+esc(l.unit||'kg')+' · wholesale</span></td>'
         +'<td>'+zar(l.unit_price_cents)+'</td>'
-        +'<td><button class="btn btn-ghost btn-sm" data-cq="-1" data-vid="'+l.variant_id+'">−</button> '+l.qty+' <button class="btn btn-ghost btn-sm" data-cq="1" data-vid="'+l.variant_id+'">+</button></td>'
+        +'<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-cq="-1" data-vid="'+l.variant_id+'">−</button> <input type="number" min="1" value="'+l.qty+'" data-cqv data-vid="'+l.variant_id+'" style="width:56px;text-align:center"> <button class="btn btn-ghost btn-sm" data-cq="1" data-vid="'+l.variant_id+'">+</button></td>'
         +'<td><b>'+zar(l.unit_price_cents*l.qty)+'</b></td>'
         +'<td><button class="btn btn-ghost btn-sm" data-rm="'+l.variant_id+'">Remove</button></td></tr>'; }).join('');
   shell('<div class="h1">Your cart</div>'
@@ -647,6 +649,7 @@ function viewCart(){
     var rm=ev.target.closest('[data-rm]'); if(rm){ removeCartLine(rm.getAttribute('data-rm')); return; }
     var n=ev.target.closest('[data-nav]'); if(n){ go(n.getAttribute('data-nav')); }
   });
+  m.addEventListener('change', function(ev){ var ci=ev.target.closest && ev.target.closest('[data-cqv]'); if(!ci) return; var l=cart.filter(function(x){return x.variant_id===ci.getAttribute('data-vid');})[0]; if(l){ l.qty=Math.max(1, parseInt(ci.value,10)||1); setPendingPackage(null); saveCart(); viewCart(); } });
 }
 function wireNav(){ Array.prototype.forEach.call(document.querySelectorAll('#main [data-nav]'), function(b){ b.addEventListener('click', function(){ go(b.getAttribute('data-nav')); }); }); }
 
