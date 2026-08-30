@@ -780,9 +780,10 @@ function viewMyOrders(){
       var box=document.getElementById('mo');
       if(r.error){ box.innerHTML='<div class="msg err">'+esc(r.error.message)+'</div>'; return; }
       var os=r.data||[]; if(!os.length){ box.innerHTML='<div class="msg">No orders yet.</div>'; return; }
+      var totalCents=os.reduce(function(a,o){return a+(o.total_cents||0);},0);
       box.innerHTML='<div class="tablewrap"><table><thead><tr><th>Order</th><th>Date</th><th>Total</th><th>Payment</th><th>Status</th><th></th></tr></thead><tbody>'
         +os.map(function(o){return '<tr data-open="'+o.id+'" style="cursor:pointer"><td>'+esc(o.order_number)+'</td><td>'+esc((o.placed_at||'').slice(0,10))+'</td><td>'+zar(o.total_cents)+'</td><td>'+payLabel(o.payment_method)+' · '+titleCase(o.payment_status)+'</td><td><span class="pill">'+esc(titleCase(o.status))+'</span></td><td class="actions"><button class="btn btn-sm btn-ghost" data-vieworder="'+o.id+'">View</button></td></tr>';}).join('')
-        +'</tbody></table></div>';
+        +'</tbody></table></div>'+'<div class="sumrow total" style="max-width:320px;margin-left:auto;margin-top:10px"><span>Total ('+os.length+' order'+(os.length===1?'':'s')+')</span><b>'+zar(totalCents)+'</b></div>';
       box.addEventListener('click', function(ev){ var vo=ev.target.closest && ev.target.closest('[data-vieworder]'); if(vo){ showOrderModal(vo.getAttribute('data-vieworder')); return; } var t=ev.target.closest('[data-open]'); if(t){ go('#/confirm/'+t.getAttribute('data-open')); } });
     });
 }
@@ -802,6 +803,7 @@ function viewAdminOrders(){
       if(r.error){ box.innerHTML='<div class="msg err">'+esc(r.error.message)+'</div>'; return; }
       var os=r.data||[];
       if(!os.length){ box.innerHTML='<div class="msg">No orders'+(adminOrdersFilter!=='all'?' with status "'+esc(titleCase(adminOrdersFilter))+'"':' yet')+'.</div>'; return; }
+      var totalCents=os.reduce(function(a,o){return a+(o.total_cents||0);},0);
       box.innerHTML='<div class="tablewrap"><table><thead><tr><th>Order</th><th>Distributor</th><th>Total</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody>'
         +os.map(function(o){
           var dn=o.distributors?((o.distributors.name||'')+' '+(o.distributors.surname||'')).trim():'', dl=(o.distributors&&o.distributors.login_name)||'';
@@ -812,7 +814,7 @@ function viewAdminOrders(){
           return '<tr><td>'+esc(o.order_number)+'</td><td>'+dcell+'</td><td>'+zar(o.total_cents)+'</td><td>'+payLabel(o.payment_method)+' · '+titleCase(o.payment_status)+'</td>'
             +'<td><select data-status data-oid="'+o.id+'">'+opts+'</select></td>'
             +'<td class="actions"><button class="btn btn-sm btn-ghost" data-vieworder="'+o.id+'">View</button>'+verify+'</td></tr>';
-        }).join('')+'</tbody></table></div><div id="aomsg"></div>';
+        }).join('')+'</tbody></table></div>'+'<div class="sumrow total" style="max-width:320px;margin-left:auto;margin-top:10px"><span>Total ('+os.length+' order'+(os.length===1?'':'s')+')</span><b>'+zar(totalCents)+'</b></div><div id="aomsg"></div>';
       box.addEventListener('change', function(ev){ var s=ev.target; if(s.hasAttribute&&s.hasAttribute('data-status')){ sb.from('orders').update({status:s.value}).eq('id',s.getAttribute('data-oid')).then(function(rr){ document.getElementById('aomsg').innerHTML=rr.error?'<div class="msg err">'+esc(rr.error.message)+'</div>':'<div class="msg ok">Status updated ✓</div>'; }); } });
       box.addEventListener('click', function(ev){
         var vo=ev.target.closest && ev.target.closest('[data-vieworder]');
