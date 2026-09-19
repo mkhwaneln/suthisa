@@ -149,6 +149,7 @@ function renderRoute(){
     if(r.view==='admin' && r.id==='neworder'){ return viewAdminNewOrder(r.id2||''); }
     if(r.view==='admin' && r.id==='invoices'){ return viewAdminInvoices(); }
     if(r.view==='admin' && r.id==='invoice-new'){ return viewNewClientInvoice(); }
+    if(r.view==='admin' && r.id==='invoice-edit'){ return viewEditInvoice(r.id2||''); }
     if(r.view==='invoice'){ return viewInvoice(r.id); }
     if(r.view==='distributors'){ return loadDistributors(); }
     return loadCatalogue(); // default admin view (Products & stock)
@@ -968,9 +969,9 @@ function viewAdminInvoices(){
     if(r.error){ box.innerHTML='<div class="msg err">'+esc(r.error.message)+'</div>'; return; }
     var inv=r.data||[]; if(!inv.length){ box.innerHTML='<div class="msg">No invoices yet.</div>'; return; }
     box.innerHTML='<div class="tablewrap"><table><thead><tr><th>Invoice</th><th>Date</th><th>Bill to</th><th>Type</th><th>Total</th><th></th></tr></thead><tbody>'
-      +inv.map(function(i){return '<tr><td><b>'+esc(i.invoice_number)+'</b></td><td>'+esc(String(i.invoice_date||'').slice(0,10))+'</td><td>'+esc(i.bill_to_name||'—')+'</td><td>'+esc(titleCase(i.source))+'</td><td>'+zar(i.total_cents)+'</td><td class="actions"><button class="btn btn-sm btn-ghost" data-inv="'+i.id+'">View</button></td></tr>';}).join('')
+      +inv.map(function(i){return '<tr><td><b>'+esc(i.invoice_number)+'</b></td><td>'+esc(String(i.invoice_date||'').slice(0,10))+'</td><td>'+esc(i.bill_to_name||'—')+'</td><td>'+esc(titleCase(i.source))+'</td><td>'+zar(i.total_cents)+'</td><td class="actions"><button class="btn btn-sm btn-ghost" data-inv="'+i.id+'">View</button> <button class="btn btn-sm btn-ghost" data-editinv="'+i.id+'">Edit</button></td></tr>';}).join('')
       +'</tbody></table></div>';
-    box.addEventListener('click', function(ev){ var b=ev.target.closest && ev.target.closest('[data-inv]'); if(b) go('#/invoice/'+b.getAttribute('data-inv')); });
+    box.addEventListener('click', function(ev){ var e=ev.target.closest && ev.target.closest('[data-editinv]'); if(e){ go('#/admin/invoice-edit/'+e.getAttribute('data-editinv')); return; } var b=ev.target.closest && ev.target.closest('[data-inv]'); if(b) go('#/invoice/'+b.getAttribute('data-inv')); });
   });
 }
 function viewNewClientInvoice(){
@@ -1026,7 +1027,7 @@ function viewInvoice(invId){
       var desc=esc(i.product_name||'')+(i.size!=null?(' '+i.size+' '+esc(i.unit||'kg')):'');
       return '<tr><td style="padding:5px 0">'+desc+'</td><td style="text-align:center">'+esc(String(i.qty))+'</td><td style="text-align:right">'+zar(i.unit_price_cents)+'</td><td style="text-align:right">'+zar(i.line_total_cents)+'</td></tr>';
     }).join('');
-    box.innerHTML='<div class="noprint" style="margin-bottom:12px"><button class="btn btn-ghost btn-sm" data-nav="#/admin/invoices">‹ Back</button> <button class="btn btn-sm" id="printbtn">🖨 Print / Save as PDF</button></div>'
+    box.innerHTML='<div class="noprint" style="margin-bottom:12px"><button class="btn btn-ghost btn-sm" data-nav="#/admin/invoices">‹ Back</button> <button class="btn btn-ghost btn-sm" data-nav="#/admin/invoice-edit/'+invId+'">✏ Edit</button> <button class="btn btn-sm" id="printbtn">🖨 Print / Save as PDF</button></div>'
       +'<div class="invoice-sheet card" style="max-width:720px;margin:0 auto">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">'
           +'<div style="display:flex;gap:12px;align-items:center"><img src="'+LOGO_ICON+'" alt="" style="width:54px;height:auto"><div><div style="font-size:20px;font-weight:800;color:var(--green-dark)">'+esc(s.business_name||'Suthisa')+'</div>'+(s.business_address?'<div class="muted" style="white-space:pre-line;font-size:13px">'+esc(s.business_address)+'</div>':'')+(([s.business_phone,s.business_email].filter(Boolean).length)?'<div class="muted" style="font-size:13px">'+esc([s.business_phone,s.business_email].filter(Boolean).join(' · '))+'</div>':'')+'</div></div>'
@@ -1042,6 +1043,67 @@ function viewInvoice(invId){
       +'</div>';
     wireNav();
     var pb=document.getElementById('printbtn'); if(pb) pb.addEventListener('click', function(){ window.print(); });
+  });
+}
+function viewEditInvoice(invId){
+  shell('<button class="btn btn-ghost btn-sm" data-nav="#/invoice/'+invId+'">‹ Back</button><div class="h1" style="margin-top:8px">Edit invoice</div><div id="ei" class="muted">Loading…</div>','admininvoices');
+  wireNav();
+  sb.from('invoices').select('*').eq('id',invId).maybeSingle().then(function(r){
+    if(!r.data){ document.getElementById('ei').innerHTML='<div class="msg err">Invoice not found.</div>'; return; }
+    var inv=r.data, orig=inv.items||[];
+    loadCatalogueData(function(products, err){
+      var box=document.getElementById('ei');
+      if(err){ box.innerHTML='<div class="msg err">Could not load products: '+esc(err.message)+'</div>'; return; }
+      var exRows=orig.map(function(it,idx){
+        var desc=esc(it.product_name||'')+(it.size!=null?(' '+it.size+' '+esc(it.unit||'kg')):'');
+        return '<div class="sumrow" data-exrow data-i="'+idx+'"><span>'+desc+'</span><span style="display:flex;gap:6px;align-items:center;white-space:nowrap">R <input type="number" min="0" step="0.01" value="'+(((it.unit_price_cents||0))/100).toFixed(2)+'" data-exprice data-i="'+idx+'" style="width:84px"> &nbsp;×&nbsp; <input type="number" min="0" step="1" value="'+(it.qty||0)+'" data-exq data-i="'+idx+'" style="width:58px"> <button class="btn btn-ghost btn-sm" data-exrm data-i="'+idx+'" style="border-color:var(--red);color:var(--red)">✕</button></span></div>';
+      }).join('')||'<div class="muted">No line items.</div>';
+      var addRows=products.map(function(p){
+        var rows=(p.product_variants||[]).map(function(v){ return '<div class="sumrow"><span>'+v.size_kg+' '+esc(p.unit||'kg')+'</span><span style="display:flex;gap:6px;align-items:center;white-space:nowrap">R <input type="number" min="0" step="0.01" value="'+(v.wholesale_price_cents/100).toFixed(2)+'" data-iprice data-vid="'+v.id+'" style="width:84px"> &nbsp;×&nbsp; <input type="number" min="0" step="1" value="0" data-iq data-vid="'+v.id+'" style="width:58px"></span></div>'; }).join('');
+        return '<div class="card" style="margin-bottom:8px"><b>'+esc(p.name)+'</b>'+rows+'</div>';
+      }).join('');
+      box.innerHTML='<div class="card"><b>Bill to</b><label>Name</label><input id="einame" value="'+esc(inv.bill_to_name||'')+'"><label>Contact</label><input id="eicontact" value="'+esc(inv.bill_to_contact||'')+'"><label>Address</label><textarea id="eiaddr" rows="2">'+esc(inv.bill_to_address||'')+'</textarea><div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px"><label>Invoice date</label><input id="eidate" type="date" value="'+esc(String(inv.invoice_date||'').slice(0,10))+'"></div><div style="flex:1;min-width:140px"><label>Status</label><select id="eistatus"><option value="unpaid"'+(inv.status!=='paid'?' selected':'')+'>Unpaid</option><option value="paid"'+(inv.status==='paid'?' selected':'')+'>Paid</option></select></div></div></div>'
+        +'<div style="margin-top:12px"><b>Line items</b><div class="card">'+exRows+'</div></div>'
+        +'<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;color:var(--green-dark)">+ Add products</summary><div style="margin-top:8px">'+addRows+'</div></details>'
+        +'<div class="card"><b>Extras</b><label>Delivery fee (R)</label><input id="eideliv" type="number" min="0" step="0.01" value="'+(((inv.delivery_cents||0))/100).toFixed(2)+'"><label>Notes</label><textarea id="einotes" rows="2">'+esc(inv.notes||'')+'</textarea></div>'
+        +'<div class="card"><b>Bank details</b><label>Account name</label><input id="eibankacc" value="'+esc(inv.account_name||'')+'"><label>Account number</label><input id="eibanknum" value="'+esc(inv.account_number||'')+'"><label>Bank</label><input id="eibankname" value="'+esc(inv.bank_name||'')+'"><label>Branch</label><input id="eibankbranch" value="'+esc(inv.branch_code||'')+'"></div>'
+        +'<div class="card" style="max-width:340px;margin-left:auto"><div class="sumrow"><span>Subtotal</span><b id="eisub">'+zar(0)+'</b></div><div class="sumrow"><span>Delivery</span><b id="eidelivv">'+zar(0)+'</b></div><div class="sumrow total"><span>Total</span><b id="eitotal">'+zar(0)+'</b></div><button class="btn btn-block" id="eisave" style="margin-top:10px">Save changes</button></div><div id="eimsg"></div>';
+      function collect(){
+        var items=[], sub=0;
+        Array.prototype.forEach.call(box.querySelectorAll('[data-exrow]'), function(row){
+          var idx=row.getAttribute('data-i'), o=orig[idx]||{};
+          var qe=box.querySelector('[data-exq][data-i="'+idx+'"]'), pe=box.querySelector('[data-exprice][data-i="'+idx+'"]');
+          var q=parseInt((qe&&qe.value)||0,10)||0, pc=pe?Math.max(0,Math.round((parseFloat(pe.value||0)||0)*100)):0;
+          if(q>0){ items.push({product_name:o.product_name, size:o.size, unit:o.unit, qty:q, unit_price_cents:pc, line_total_cents:pc*q}); sub+=pc*q; }
+        });
+        Array.prototype.forEach.call(box.querySelectorAll('[data-iq]'), function(i){
+          var q=parseInt(i.value||0,10)||0; if(q<=0) return;
+          var vid=i.getAttribute('data-vid'), pe=box.querySelector('[data-iprice][data-vid="'+vid+'"]');
+          var pc=pe?Math.max(0,Math.round((parseFloat(pe.value||0)||0)*100)):0, pv=null, pp=null;
+          products.forEach(function(p){ (p.product_variants||[]).forEach(function(v){ if(v.id===vid){ pv=v; pp=p; } }); });
+          if(pv){ items.push({product_name:pp.name, size:pv.size_kg, unit:pp.unit||'kg', qty:q, unit_price_cents:pc, line_total_cents:pc*q}); sub+=pc*q; }
+        });
+        return {items:items, sub:sub};
+      }
+      function recompute(){ var c=collect(); var dv=Math.max(0,Math.round((parseFloat(document.getElementById('eideliv').value||0)||0)*100)); document.getElementById('eisub').textContent=zar(c.sub); document.getElementById('eidelivv').textContent=zar(dv); document.getElementById('eitotal').textContent=zar(c.sub+dv); }
+      recompute();
+      box.addEventListener('input', function(ev){ var t=ev.target; if((t.hasAttribute&&(t.hasAttribute('data-exprice')||t.hasAttribute('data-exq')||t.hasAttribute('data-iprice')||t.hasAttribute('data-iq')))||t.id==='eideliv') recompute(); });
+      box.addEventListener('click', function(ev){
+        var rm=ev.target.closest && ev.target.closest('[data-exrm]'); if(rm){ var row=rm.closest('[data-exrow]'); if(row) row.parentNode.removeChild(row); recompute(); return; }
+        if(ev.target.id!=='eisave') return;
+        var btn=ev.target, msg=document.getElementById('eimsg');
+        var name=(document.getElementById('einame').value||'').trim();
+        if(!name){ msg.innerHTML='<div class="msg err">Enter a bill-to name.</div>'; return; }
+        var c=collect(); if(!c.items.length){ msg.innerHTML='<div class="msg err">The invoice needs at least one line item.</div>'; return; }
+        var dv=Math.max(0,Math.round((parseFloat(document.getElementById('eideliv').value||0)||0)*100));
+        btn.disabled=true; btn.textContent='Saving…';
+        sb.from('invoices').update({ bill_to_name:name, bill_to_contact:(document.getElementById('eicontact').value||'').trim()||null, bill_to_address:(document.getElementById('eiaddr').value||'').trim()||null, invoice_date:document.getElementById('eidate').value||null, status:document.getElementById('eistatus').value, notes:(document.getElementById('einotes').value||'').trim()||null, items:c.items, subtotal_cents:c.sub, delivery_cents:dv, total_cents:c.sub+dv, bank_name:(document.getElementById('eibankname').value||'').trim()||null, account_name:(document.getElementById('eibankacc').value||'').trim()||null, account_number:(document.getElementById('eibanknum').value||'').trim()||null, branch_code:(document.getElementById('eibankbranch').value||'').trim()||null }).eq('id',invId).then(function(rr){
+          btn.disabled=false; btn.textContent='Save changes';
+          if(rr.error){ msg.innerHTML='<div class="msg err">Save failed: '+esc(rr.error.message)+'</div>'; return; }
+          go('#/invoice/'+invId);
+        });
+      });
+    });
   });
 }
 function viewAdminSettings(){
