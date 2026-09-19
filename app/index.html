@@ -977,8 +977,11 @@ function viewAdminInvoices(){
 function viewNewClientInvoice(){
   shell('<button class="btn btn-ghost btn-sm" data-nav="#/admin/invoices">‹ Back to invoices</button><div class="h1" style="margin-top:8px">New client invoice</div><div id="nci" class="muted">Loading…</div>','admininvoices');
   wireNav();
-  sb.from('business_settings').select('bank_name,account_name,account_number,branch_code').maybeSingle().then(function(sres){
-    var s=(sres&&sres.data)||{};
+  Promise.all([
+    sb.from('business_settings').select('bank_name,account_name,account_number,branch_code').maybeSingle(),
+    sb.from('clients').select('id,name,contact,address').order('name')
+  ]).then(function(sres){
+    var s=(sres[0]&&sres[0].data)||{}, clients=(sres[1]&&sres[1].data)||[];
     loadCatalogueData(function(products, err){
       var box=document.getElementById('nci');
       if(err){ box.innerHTML='<div class="msg err">Could not load products: '+esc(err.message)+'</div>'; return; }
@@ -986,7 +989,7 @@ function viewNewClientInvoice(){
         var rows=(p.product_variants||[]).map(function(v){ return '<div class="sumrow"><span>'+v.size_kg+' '+esc(p.unit||'kg')+'</span><span style="display:flex;gap:6px;align-items:center;white-space:nowrap">R <input type="number" min="0" step="0.01" value="'+(v.wholesale_price_cents/100).toFixed(2)+'" data-iprice data-vid="'+v.id+'" style="width:84px" title="Unit price"> &nbsp;×&nbsp; <input type="number" min="0" step="1" value="0" data-iq data-vid="'+v.id+'" style="width:64px" title="Quantity"></span></div>'; }).join('')||'<div class="muted">No sizes.</div>';
         return '<div class="card" style="margin-bottom:10px"><b>'+esc(p.name)+'</b>'+rows+'</div>';
       }).join('')||'<div class="msg">No products.</div>';
-      box.innerHTML='<div class="card"><b>Client (bill to)</b><label>Name</label><input id="ciname" placeholder="Client / company name"><label>Contact <span class="muted">(phone / email)</span></label><input id="cicontact"><label>Address</label><textarea id="ciaddr" rows="2"></textarea></div>'
+      box.innerHTML='<div class="card"><b>Client (bill to)</b>'+(clients.length?'<label>Saved client</label><select id="cisaved"><option value="">— New client —</option>'+clients.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join('')+'</select>':'')+'<label>Name</label><input id="ciname" placeholder="Client / company name"><label>Contact <span class="muted">(phone / email)</span></label><input id="cicontact"><label>Address</label><textarea id="ciaddr" rows="2"></textarea></div>'
         +'<div style="margin-top:12px"><b>Products</b>'+prodHtml+'</div>'
         +'<div class="card"><b>Extras</b><label>Delivery fee (R)</label><input id="cideliv" type="number" min="0" step="0.01" value="0"><label>Notes</label><textarea id="cinotes" rows="2"></textarea></div>'
         +'<div class="card"><b>Bank details</b><p class="muted">Prefilled from Settings — edit for this invoice if needed.</p><label>Account name</label><input id="cibankacc" value="'+esc(s.account_name||'')+'"><label>Account number</label><input id="cibanknum" value="'+esc(s.account_number||'')+'"><label>Bank</label><input id="cibankname" value="'+esc(s.bank_name||'')+'"><label>Branch</label><input id="cibankbranch" value="'+esc(s.branch_code||'')+'"></div>'
@@ -996,6 +999,7 @@ function viewNewClientInvoice(){
       function recompute(){ var sub=0; Array.prototype.forEach.call(box.querySelectorAll('[data-iq]'), function(i){ var q=parseInt(i.value||0,10)||0; if(q<0)q=0; sub+=q*priceCentsFor(i.getAttribute('data-vid')); }); var dv=Math.round((parseFloat(document.getElementById('cideliv').value||0)||0)*100); document.getElementById('cisub').textContent=zar(sub); document.getElementById('cidelivv').textContent=zar(dv); document.getElementById('citotal').textContent=zar(sub+dv); }
       recompute();
       box.addEventListener('input', function(ev){ if((ev.target.hasAttribute&&(ev.target.hasAttribute('data-iq')||ev.target.hasAttribute('data-iprice')))||ev.target.id==='cideliv') recompute(); });
+      box.addEventListener('change', function(ev){ if(ev.target.id==='cisaved'){ var c=clients.filter(function(x){return x.id===ev.target.value;})[0]; if(c){ document.getElementById('ciname').value=c.name||''; document.getElementById('cicontact').value=c.contact||''; document.getElementById('ciaddr').value=c.address||''; } } });
       box.addEventListener('click', function(ev){
         if(ev.target.id!=='cicreate') return;
         var btn=ev.target, msg=document.getElementById('cimsg');
