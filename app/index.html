@@ -72,6 +72,7 @@ tbody tr:nth-child(even){background:#f7faf8}
 .pimg.detail{height:180px}.pimg.detail img{max-width:150px;max-height:150px}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto;z-index:100}
 .modal-box{background:#fff;border-radius:14px;padding:18px;max-width:560px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+@media print{ .top,.nav,.noprint{display:none!important} body{background:#fff} main#main{max-width:none;margin:0;padding:0} .invoice-sheet{box-shadow:none;border:1px solid #ddd} }
 </style>
 </head>
 <body>
@@ -146,6 +147,9 @@ function renderRoute(){
     if(r.view==='admin' && r.id==='settings'){ return viewAdminSettings(); }
     if(r.view==='admin' && r.id==='deals'){ return viewAdminDeals(); }
     if(r.view==='admin' && r.id==='neworder'){ return viewAdminNewOrder(r.id2||''); }
+    if(r.view==='admin' && r.id==='invoices'){ return viewAdminInvoices(); }
+    if(r.view==='admin' && r.id==='invoice-new'){ return viewNewClientInvoice(); }
+    if(r.view==='invoice'){ return viewInvoice(r.id); }
     if(r.view==='distributors'){ return loadDistributors(); }
     return loadCatalogue(); // default admin view (Products & stock)
   }
@@ -227,6 +231,7 @@ function shell(inner, view){
       +'<button class="tab'+(view==='distributors'?' active':'')+'" data-nav="#/distributors">Distributors</button>'
       +'<button class="tab'+(view==='adminorders'?' active':'')+'" data-nav="#/admin/orders">Orders</button>'
       +'<button class="tab'+(view==='adminneworder'?' active':'')+'" data-nav="#/admin/neworder">New order</button>'
+      +'<button class="tab'+(view==='admininvoices'?' active':'')+'" data-nav="#/admin/invoices">Invoices</button>'
       +'<button class="tab'+(view==='admindepots'?' active':'')+'" data-nav="#/admin/depots">Depots</button>'
       +'<button class="tab'+(view==='adminsettings'?' active':'')+'" data-nav="#/admin/settings">Settings</button>'
       +'<button class="tab'+(view==='admindeals'?' active':'')+'" data-nav="#/admin/deals">Deals</button></div>';
@@ -818,12 +823,14 @@ function viewAdminOrders(){
           var verify=(o.payment_method==='eft' && pay && pay.proof_url && o.payment_status!=='paid')?' <button class="btn btn-sm btn-ghost" data-viewproof="'+esc(pay.proof_url)+'">View proof</button> <button class="btn btn-sm" data-verify="1" data-oid="'+o.id+'" data-pid="'+pay.id+'">Mark paid</button>':'';
           return '<tr><td>'+esc(o.order_number)+'</td><td>'+dcell+'</td><td>'+zar(o.total_cents)+'</td><td>'+payLabel(o.payment_method)+' · '+titleCase(o.payment_status)+'</td>'
             +'<td><select data-status data-oid="'+o.id+'">'+opts+'</select></td>'
-            +'<td class="actions"><button class="btn btn-sm btn-ghost" data-vieworder="'+o.id+'">View</button>'+verify+'</td></tr>';
+            +'<td class="actions"><button class="btn btn-sm btn-ghost" data-vieworder="'+o.id+'">View</button> <button class="btn btn-sm btn-ghost" data-invoice="'+o.id+'">Invoice</button>'+verify+'</td></tr>';
         }).join('')+'</tbody></table></div>'+'<div class="sumrow total" style="max-width:320px;margin-left:auto;margin-top:10px"><span>Total ('+os.length+' order'+(os.length===1?'':'s')+')</span><b>'+zar(totalCents)+'</b></div><div id="aomsg"></div>';
       box.addEventListener('change', function(ev){ var s=ev.target; if(s.hasAttribute&&s.hasAttribute('data-status')){ sb.from('orders').update({status:s.value}).eq('id',s.getAttribute('data-oid')).then(function(rr){ document.getElementById('aomsg').innerHTML=rr.error?'<div class="msg err">'+esc(rr.error.message)+'</div>':'<div class="msg ok">Status updated ✓</div>'; }); } });
       box.addEventListener('click', function(ev){
         var vo=ev.target.closest && ev.target.closest('[data-vieworder]');
         if(vo){ showOrderModal(vo.getAttribute('data-vieworder')); return; }
+        var iv=ev.target.closest && ev.target.closest('[data-invoice]');
+        if(iv){ sb.rpc('create_order_invoice',{p_order_id:iv.getAttribute('data-invoice')}).then(function(rr){ if(rr.error){ document.getElementById('aomsg').innerHTML='<div class="msg err">Invoice failed: '+esc(rr.error.message)+'</div>'; return; } var row=Array.isArray(rr.data)?rr.data[0]:rr.data; go('#/invoice/'+row.id); }); return; }
         var vp=ev.target.closest && ev.target.closest('[data-viewproof]');
         if(vp){ sb.storage.from('pop-uploads').createSignedUrl(vp.getAttribute('data-viewproof'),120).then(function(u){ if(u.data&&u.data.signedUrl){ window.open(u.data.signedUrl,'_blank'); } else { alert('Could not open proof'+(u.error?': '+u.error.message:'')); } }); return; }
         var vb=ev.target.closest && ev.target.closest('[data-verify]');
@@ -837,6 +844,8 @@ function showOrderModal(orderId){
   host.addEventListener('click', function(ev){
     var vp=ev.target.closest && ev.target.closest('[data-viewproof]');
     if(vp){ sb.storage.from('pop-uploads').createSignedUrl(vp.getAttribute('data-viewproof'),120).then(function(u){ if(u.data&&u.data.signedUrl){ window.open(u.data.signedUrl,'_blank'); } else { alert('Could not open proof'+(u.error?': '+u.error.message:'')); } }); return; }
+    var iv=ev.target.closest && ev.target.closest('[data-invoice]');
+    if(iv){ sb.rpc('create_order_invoice',{p_order_id:iv.getAttribute('data-invoice')}).then(function(rr){ if(rr.error){ alert('Invoice failed: '+rr.error.message); return; } var row=Array.isArray(rr.data)?rr.data[0]:rr.data; go('#/invoice/'+row.id); }); return; }
     if(ev.target===host || (ev.target.closest && ev.target.closest('[data-close]'))) document.body.removeChild(host);
   });
   document.body.appendChild(host);
@@ -875,7 +884,8 @@ function showOrderModal(orderId){
           +(proof?'<div class="sumrow"><span class="muted">Proof of payment</span><button class="btn btn-ghost btn-sm" data-viewproof="'+esc(proof.proof_url)+'">View proof</button></div>':'')
           +(o.notes && !o.is_package?'<div class="sumrow"><span class="muted">Notes</span><b>'+esc(o.notes)+'</b></div>':'')
         +'</div>'
-        +'<button class="btn btn-block" data-close style="margin-top:12px">Close</button>';
+        +(me.role==='admin'?'<button class="btn btn-block" data-invoice="'+o.id+'" style="margin-top:12px">Generate invoice</button>':'')
+        +'<button class="btn btn-ghost btn-block" data-close style="margin-top:8px">Close</button>';
     });
 }
 
@@ -950,6 +960,89 @@ function viewAdminNewOrder(preId){
     });
   });
 }
+function viewAdminInvoices(){
+  shell('<div class="h1">Invoices</div><button class="btn" data-nav="#/admin/invoice-new" style="margin-bottom:12px">+ New client invoice</button><div id="invlist" class="muted">Loading…</div>','admininvoices');
+  wireNav();
+  sb.from('invoices').select('id,invoice_number,invoice_date,source,bill_to_name,total_cents,status').order('created_at',{ascending:false}).then(function(r){
+    var box=document.getElementById('invlist');
+    if(r.error){ box.innerHTML='<div class="msg err">'+esc(r.error.message)+'</div>'; return; }
+    var inv=r.data||[]; if(!inv.length){ box.innerHTML='<div class="msg">No invoices yet.</div>'; return; }
+    box.innerHTML='<div class="tablewrap"><table><thead><tr><th>Invoice</th><th>Date</th><th>Bill to</th><th>Type</th><th>Total</th><th></th></tr></thead><tbody>'
+      +inv.map(function(i){return '<tr><td><b>'+esc(i.invoice_number)+'</b></td><td>'+esc(String(i.invoice_date||'').slice(0,10))+'</td><td>'+esc(i.bill_to_name||'—')+'</td><td>'+esc(titleCase(i.source))+'</td><td>'+zar(i.total_cents)+'</td><td class="actions"><button class="btn btn-sm btn-ghost" data-inv="'+i.id+'">View</button></td></tr>';}).join('')
+      +'</tbody></table></div>';
+    box.addEventListener('click', function(ev){ var b=ev.target.closest && ev.target.closest('[data-inv]'); if(b) go('#/invoice/'+b.getAttribute('data-inv')); });
+  });
+}
+function viewNewClientInvoice(){
+  shell('<button class="btn btn-ghost btn-sm" data-nav="#/admin/invoices">‹ Back to invoices</button><div class="h1" style="margin-top:8px">New client invoice</div><div id="nci" class="muted">Loading…</div>','admininvoices');
+  wireNav();
+  sb.from('business_settings').select('bank_name,account_name,account_number,branch_code').maybeSingle().then(function(sres){
+    var s=(sres&&sres.data)||{};
+    loadCatalogueData(function(products, err){
+      var box=document.getElementById('nci');
+      if(err){ box.innerHTML='<div class="msg err">Could not load products: '+esc(err.message)+'</div>'; return; }
+      var prodHtml=products.map(function(p){
+        var rows=(p.product_variants||[]).map(function(v){ return '<div class="sumrow"><span>'+v.size_kg+' '+esc(p.unit||'kg')+' <span class="muted">· '+zar(v.wholesale_price_cents)+'</span></span><input type="number" min="0" step="1" value="0" data-iq data-vid="'+v.id+'" data-price="'+v.wholesale_price_cents+'" style="width:80px"></div>'; }).join('')||'<div class="muted">No sizes.</div>';
+        return '<div class="card" style="margin-bottom:10px"><b>'+esc(p.name)+'</b>'+rows+'</div>';
+      }).join('')||'<div class="msg">No products.</div>';
+      box.innerHTML='<div class="card"><b>Client (bill to)</b><label>Name</label><input id="ciname" placeholder="Client / company name"><label>Contact <span class="muted">(phone / email)</span></label><input id="cicontact"><label>Address</label><textarea id="ciaddr" rows="2"></textarea></div>'
+        +'<div style="margin-top:12px"><b>Products</b>'+prodHtml+'</div>'
+        +'<div class="card"><b>Extras</b><label>Delivery fee (R)</label><input id="cideliv" type="number" min="0" step="0.01" value="0"><label>Notes</label><textarea id="cinotes" rows="2"></textarea></div>'
+        +'<div class="card"><b>Bank details</b><p class="muted">Prefilled from Settings — edit for this invoice if needed.</p><label>Account name</label><input id="cibankacc" value="'+esc(s.account_name||'')+'"><label>Account number</label><input id="cibanknum" value="'+esc(s.account_number||'')+'"><label>Bank</label><input id="cibankname" value="'+esc(s.bank_name||'')+'"><label>Branch</label><input id="cibankbranch" value="'+esc(s.branch_code||'')+'"></div>'
+        +'<div class="card" style="max-width:340px;margin-left:auto"><div class="sumrow"><span>Subtotal</span><b id="cisub">'+zar(0)+'</b></div><div class="sumrow"><span>Delivery</span><b id="cidelivv">'+zar(0)+'</b></div><div class="sumrow total"><span>Total</span><b id="citotal">'+zar(0)+'</b></div><button class="btn btn-block" id="cicreate" style="margin-top:10px">Create invoice</button></div>'
+        +'<div id="cimsg"></div>';
+      function recompute(){ var sub=0; Array.prototype.forEach.call(box.querySelectorAll('[data-iq]'), function(i){ var q=parseInt(i.value||0,10)||0; if(q<0)q=0; sub+=q*(parseInt(i.getAttribute('data-price'),10)||0); }); var dv=Math.round((parseFloat(document.getElementById('cideliv').value||0)||0)*100); document.getElementById('cisub').textContent=zar(sub); document.getElementById('cidelivv').textContent=zar(dv); document.getElementById('citotal').textContent=zar(sub+dv); }
+      recompute();
+      box.addEventListener('input', function(ev){ if((ev.target.hasAttribute&&ev.target.hasAttribute('data-iq'))||ev.target.id==='cideliv') recompute(); });
+      box.addEventListener('click', function(ev){
+        if(ev.target.id!=='cicreate') return;
+        var btn=ev.target, msg=document.getElementById('cimsg');
+        var name=(document.getElementById('ciname').value||'').trim();
+        if(!name){ msg.innerHTML='<div class="msg err">Enter a client name.</div>'; return; }
+        var items=[]; Array.prototype.forEach.call(box.querySelectorAll('[data-iq]'), function(i){ var q=parseInt(i.value||0,10)||0; if(q>0) items.push({variant_id:i.getAttribute('data-vid'), qty:q}); });
+        if(!items.length){ msg.innerHTML='<div class="msg err">Add at least one product.</div>'; return; }
+        btn.disabled=true; btn.textContent='Creating…';
+        sb.rpc('create_client_invoice', { p_bill_to_name:name, p_bill_to_contact:(document.getElementById('cicontact').value||'').trim(), p_bill_to_address:(document.getElementById('ciaddr').value||'').trim(), p_items:items, p_delivery_cents:Math.round((parseFloat(document.getElementById('cideliv').value||0)||0)*100), p_notes:(document.getElementById('cinotes').value||'').trim()||null, p_bank_name:(document.getElementById('cibankname').value||'').trim(), p_account_name:(document.getElementById('cibankacc').value||'').trim(), p_account_number:(document.getElementById('cibanknum').value||'').trim(), p_branch_code:(document.getElementById('cibankbranch').value||'').trim() }).then(function(r){
+          btn.disabled=false; btn.textContent='Create invoice';
+          if(r.error){ msg.innerHTML='<div class="msg err">Could not create: '+esc(r.error.message)+'</div>'; return; }
+          var row=Array.isArray(r.data)?r.data[0]:r.data; go('#/invoice/'+row.id);
+        });
+      });
+    });
+  });
+}
+function viewInvoice(invId){
+  shell('<div id="inv" class="muted">Loading…</div>','admininvoices');
+  Promise.all([
+    sb.from('invoices').select('*,orders(order_number)').eq('id',invId).maybeSingle(),
+    sb.from('business_settings').select('business_name,business_address,business_phone,business_email').maybeSingle()
+  ]).then(function(res){
+    var box=document.getElementById('inv');
+    var inv=res[0]&&res[0].data, s=(res[1]&&res[1].data)||{};
+    if(!inv){ box.innerHTML='<div class="msg err">Invoice not found.</div>'; return; }
+    var oref=inv.orders&&inv.orders.order_number;
+    var itemRows=(inv.items||[]).map(function(i){
+      var desc=esc(i.product_name||'')+(i.size!=null?(' '+i.size+' '+esc(i.unit||'kg')):'');
+      return '<tr><td style="padding:5px 0">'+desc+'</td><td style="text-align:center">'+esc(String(i.qty))+'</td><td style="text-align:right">'+zar(i.unit_price_cents)+'</td><td style="text-align:right">'+zar(i.line_total_cents)+'</td></tr>';
+    }).join('');
+    box.innerHTML='<div class="noprint" style="margin-bottom:12px"><button class="btn btn-ghost btn-sm" data-nav="#/admin/invoices">‹ Back</button> <button class="btn btn-sm" id="printbtn">🖨 Print / Save as PDF</button></div>'
+      +'<div class="invoice-sheet card" style="max-width:720px;margin:0 auto">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">'
+          +'<div style="display:flex;gap:12px;align-items:center"><img src="'+LOGO_ICON+'" alt="" style="width:54px;height:auto"><div><div style="font-size:20px;font-weight:800;color:var(--green-dark)">'+esc(s.business_name||'Suthisa')+'</div>'+(s.business_address?'<div class="muted" style="white-space:pre-line;font-size:13px">'+esc(s.business_address)+'</div>':'')+(([s.business_phone,s.business_email].filter(Boolean).length)?'<div class="muted" style="font-size:13px">'+esc([s.business_phone,s.business_email].filter(Boolean).join(' · '))+'</div>':'')+'</div></div>'
+          +'<div style="text-align:right"><div style="font-size:26px;font-weight:800;letter-spacing:1px">INVOICE</div><div><b>'+esc(inv.invoice_number)+'</b></div><div class="muted">'+esc(String(inv.invoice_date||'').slice(0,10))+'</div>'+(oref?'<div class="muted" style="font-size:12px">Order '+esc(oref)+'</div>':'')+'<div class="muted" style="font-size:12px">Status: '+esc(titleCase(inv.status))+'</div></div>'
+        +'</div>'
+        +'<hr style="border:none;border-top:1px solid var(--line);margin:14px 0">'
+        +'<div><div class="muted" style="font-size:12px;letter-spacing:1px">BILL TO</div><b>'+esc(inv.bill_to_name||'—')+'</b>'+(inv.bill_to_contact?'<div class="muted">'+esc(inv.bill_to_contact)+'</div>':'')+(inv.bill_to_address?'<div class="muted" style="white-space:pre-line">'+esc(inv.bill_to_address)+'</div>':'')+'</div>'
+        +'<table style="width:100%;margin-top:14px;border-collapse:collapse"><thead><tr style="border-bottom:2px solid var(--line)"><th style="text-align:left;padding:6px 0">Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Amount</th></tr></thead><tbody>'+itemRows+'</tbody></table>'
+        +'<div style="max-width:280px;margin-left:auto;margin-top:12px"><div class="sumrow"><span>Subtotal</span><b>'+zar(inv.subtotal_cents)+'</b></div>'+(inv.delivery_cents?'<div class="sumrow"><span>Delivery</span><b>'+zar(inv.delivery_cents)+'</b></div>':'')+'<div class="sumrow total"><span>Total</span><b>'+zar(inv.total_cents)+'</b></div></div>'
+        +(inv.notes?'<div class="msg" style="margin-top:12px;text-align:left">'+esc(inv.notes).replace(/\n/g,'<br>')+'</div>':'')
+        +'<hr style="border:none;border-top:1px solid var(--line);margin:14px 0">'
+        +'<div style="font-size:13px"><b>Payment — EFT</b><div class="muted">Account name: '+esc(inv.account_name||'—')+'</div><div class="muted">Account number: '+esc(inv.account_number||'—')+'</div><div class="muted">Bank: '+esc(inv.bank_name||'—')+'</div><div class="muted">Branch: '+esc(inv.branch_code||'—')+'</div><div class="muted">Reference: '+esc(inv.invoice_number)+'</div></div>'
+      +'</div>';
+    wireNav();
+    var pb=document.getElementById('printbtn'); if(pb) pb.addEventListener('click', function(){ window.print(); });
+  });
+}
 function viewAdminSettings(){
   shell('<div class="h1">Business settings</div><p class="sub">Bank details (shown to distributors paying by EFT) and the delivery fee. Changes save automatically.</p><div id="bset" class="muted">Loading…</div>', 'adminsettings');
   sb.from('business_settings').select('*').maybeSingle().then(function(r){
@@ -959,7 +1052,12 @@ function viewAdminSettings(){
     function val(k){ return esc(s[k]==null?'':s[k]); }
     var feeR = s.default_delivery_fee_cents!=null ? (s.default_delivery_fee_cents/100).toFixed(2) : '';
     box.innerHTML='<form id="bsform" class="card" style="max-width:520px">'
-      +'<b>Bank details (EFT)</b>'
+      +'<b>Business details (invoice header)</b>'
+      +'<label>Business name</label><input name="business_name" value="'+val('business_name')+'" placeholder="Suthisa Milling">'
+      +'<label>Address</label><textarea name="business_address" rows="2" placeholder="Street, city, postal code">'+val('business_address')+'</textarea>'
+      +'<label>Phone</label><input name="business_phone" value="'+val('business_phone')+'">'
+      +'<label>Email</label><input name="business_email" value="'+val('business_email')+'">'
+      +'<hr style="border:none;border-top:1px solid var(--line);margin:16px 0"><b>Bank details (EFT)</b>'
       +'<label>Bank name</label><input name="bank_name" value="'+val('bank_name')+'" placeholder="e.g. FNB">'
       +'<label>Account name</label><input name="account_name" value="'+val('account_name')+'" placeholder="Suthisa Milling">'
       +'<label>Account number</label><input name="account_number" value="'+val('account_number')+'">'
@@ -974,6 +1072,10 @@ function viewAdminSettings(){
       var fee=parseFloat(f.delivery_fee.value||'0'); if(isNaN(fee)||fee<0) fee=0;
       function trimOrNull(x){ x=(x||'').trim(); return x||null; }
       var patch={ id:true,
+        business_name:trimOrNull(f.business_name.value),
+        business_address:trimOrNull(f.business_address.value),
+        business_phone:trimOrNull(f.business_phone.value),
+        business_email:trimOrNull(f.business_email.value),
         bank_name:trimOrNull(f.bank_name.value),
         account_name:trimOrNull(f.account_name.value),
         account_number:trimOrNull(f.account_number.value),
